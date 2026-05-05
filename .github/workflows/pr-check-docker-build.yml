@@ -1,0 +1,31 @@
+name: Docker Build PR Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+
+jobs:
+  docker-build:
+    runs-on: ${{ fromJSON(vars.GWI_DEFAULT_RUNNERS) }}
+    timeout-minutes: 60
+    container:
+      image: eu.gcr.io/gwi-host-net/ubuntu:act-latest
+      credentials:
+        username: _json_key
+        password: ${{ secrets.SA_GWI_HOST_NET }}
+    name: 🐳 Check Docker build
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🐳 Build Docker image
+        run: |
+          docker build -t quotas-forecasting-image .
+      
+      - name: Run --help to verify CLI startup
+        run: |
+          docker run quotas-forecasting-image --help

@@ -1,0 +1,49 @@
+name: Post-Merge Cloud Run Job Trigger
+
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: ml-cloud-374512
+  GCP_REGION: europe-west1
+  CLOUD_RUN_JOB: quotas-forecasting-run
+
+jobs:
+  run-job:
+    runs-on: ${{ fromJSON(vars.GWI_DEFAULT_RUNNERS) }}
+    timeout-minutes: 60
+    container:
+      image: eu.gcr.io/gwi-host-net/ubuntu:act-latest
+      credentials:
+        username: _json_key
+        password: ${{ secrets.SA_GWI_HOST_NET }}
+    name: 🚀 Trigger Cloud Run job
+
+    steps:
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: Authenticate to Google Cloud for Deploy
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SA_ML_CLOUD }}
+          project_id: 'ml-cloud-374512'
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SA_ML_CLOUD }}
+          project_id: 'ml-cloud-374512'
+
+      - name: Trigger Cloud Run Job
+        run: |
+          gcloud run jobs execute "$CLOUD_RUN_JOB" \
+            --region="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --wait
+            

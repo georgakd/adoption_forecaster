@@ -1,0 +1,182 @@
+name: Validate Outputs
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+
+jobs:
+  validate-outputs:
+    runs-on: ${{ fromJSON(vars.GWI_DEFAULT_RUNNERS) }}
+    timeout-minutes: 60
+    container:
+      image: eu.gcr.io/gwi-host-net/ubuntu:act-latest
+      credentials:
+        username: _json_key
+        password: ${{ secrets.SA_GWI_HOST_NET }}
+    name: Validate outputs between branches
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SA_GWI_HOST_NET }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Build Docker image
+        run: |
+          docker build -t quotas-forecasting-image .
+
+      - name: Fetch forecasting SA key from Secret Manager
+        run: |
+          gcloud secrets versions access latest \
+            --project=339766178133 \
+            --secret="quotas-forecasting-sa-key" \
+            > /tmp/forecasting-creds.json
+
+      - name: Determine latest available year from CSV data
+        id: years
+        run: |
+          # Activate the forecasting service account for GCS access
+          gcloud auth activate-service-account --key-file=/tmp/forecasting-creds.json
+
+          # List files and get the first one from Education folder
+          FIRST_FILE=$(gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv 2>/dev/null | head -1)
+          if [ -z "$FIRST_FILE" ]; then
+            # If Education folder is empty, try Age_Gender
+            FIRST_FILE=$(gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv 2>/dev/null | head -1)
+          fi
+
+          if [ -z "$FIRST_FILE" ]; then
+            echo "Error: No input CSV files found in GCS to determine available years"
+            echo "Attempted paths:"
+            echo "  - gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv"
+            echo "  - gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv"
+            echo "Checking if bucket is accessible..."
+            gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/ 2>&1 || true
+            exit 1
+          fi
+
+          #Download file to read its contents
+          TEMP_FILE="/tmp/tmp_csv_file.csv"
+          gsutil cp "$FIRST_FILE" "$TEMP_FILE"
+
+          # Extract last column name from header
+          LAST_COLUMN=$(head -n 1 "$TEMP_FILE" | awk -F',' '{print $NF}' | tr -d '\r\n')
+
+          # Extract year from the last column (should be a 4-digit year like "2024")
+          LAST_YEAR=$(echo "$LAST_COLUMN" | grep -oE '20[0-9]{2}' | head -1)
+
+          if [ -z "$LAST_YEAR" ]; then
+            echo "Error: Could not extract year from last column of CSV file"
+            echo "File: $FIRST_FILE"
+            echo "Last column: $LAST_COLUMN"
+            rm -f "$TEMP_FILE"
+            exit 1
+          fi
+
+          FILENAME=$(basename "$FIRST_FILE")
+          PRED_YEAR=$((LAST_YEAR + 2))
+
+          echo "Filename: $FILENAME"
+          echo "Last column: $LAST_COLUMN"
+          echo "Last column year: $LAST_YEAR"
+          echo "Latest available year (LAST_YEAR): $LAST_YEAR"
+          echo "Prediction year (PRED_YEAR): $PRED_YEAR"
+
+          #clean up temporary file
+          rm -f "$TEMP_FILE"
+
+          echo "pred_year=$PRED_YEAR" >> $GITHUB_OUTPUT
+          echo "last_year=$LAST_YEAR" >> $GITHUB_OUTPUT
+          echo "PRED_YEAR=$PRED_YEAR" >> $GITHUB_ENV
+          echo "LAST_YEAR=$LAST_YEAR" >> $GITHUB_ENV
+
+      - name: Download inputs from GCS
+        run: |
+          gcloud auth activate-service-account --key-file=/tmp/forecasting-creds.json
+          mkdir -p quotas_forecasting/Education/input quotas_forecasting/Age_Gender/input
+          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv quotas_forecasting/Education/input/
+          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv quotas_forecasting/Age_Gender/input/
+
+      - name: Run predictions on main
+        run: |
+          git checkout main
+
+          docker container run --rm \
+            --user root \
+            -e NUMBA_CACHE_DIR=/tmp \
+            -e PYTHONPATH=/workspace:/app \
+            -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/forecasting-creds.json" \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            quotas-forecasting-image:latest \
+            --module both --mode local --pred-year "$PRED_YEAR" --last-year "$LAST_YEAR"
+
+          # Copy files to validation-outputs
+          mkdir -p validation-outputs/main/Education validation-outputs/main/Age_Gender
+
+          if [ -d "quotas_forecasting/Education/output" ]; then
+            cp -v quotas_forecasting/Education/output/*.csv validation-outputs/main/Education/
+          fi
+
+          if [ -d "quotas_forecasting/Age_Gender/output" ]; then
+            cp -v quotas_forecasting/Age_Gender/output/*.csv validation-outputs/main/Age_Gender/
+          fi
+
+      - name: Run predictions on PR branch
+        run: |
+          git checkout ${{ github.head_ref }}
+
+          docker container run --rm \
+            --user root \
+            -e NUMBA_CACHE_DIR=/tmp \
+            -e PYTHONPATH=/workspace:/app \
+            -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/forecasting-creds.json" \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            quotas-forecasting-image:latest \
+            --module both --mode local --pred-year "$PRED_YEAR" --last-year "$LAST_YEAR"
+
+          # Copy files to validation-outputs
+          mkdir -p validation-outputs/pr/Education validation-outputs/pr/Age_Gender
+
+          if [ -d "quotas_forecasting/Education/output" ]; then
+            cp -v quotas_forecasting/Education/output/*.csv validation-outputs/pr/Education/
+          fi
+
+          if [ -d "quotas_forecasting/Age_Gender/output" ]; then
+            cp -v quotas_forecasting/Age_Gender/output/*.csv validation-outputs/pr/Age_Gender/
+          fi
+
+      - name: Run validation script
+        run: |
+          docker container run --rm \
+            --user root \
+            --entrypoint python \
+            -e PYTHONPATH=/workspace:/app \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            quotas-forecasting-image:latest \
+            quotas_forecasting/testing/validation_ga.py \
+              --base-dir validation-outputs/main \
+              --compare-dir validation-outputs/pr \
+              --pred-year "$PRED_YEAR" \
+              --last-year "$LAST_YEAR" \
+              --show-diffs
+
+      - name: Upload validation outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-outputs
+          path: validation-outputs/**
