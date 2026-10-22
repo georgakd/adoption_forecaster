@@ -19,3 +19,26 @@ class Violation:
     segment: str
     year: int
     detail: str
+
+
+@dataclass
+class Citation:
+    """Evidence for a correction: the verbatim quote, the share-scale value it states (``unit`` is the quote's unit), and its year."""
+
+    doc_id: str
+    quoted_text: str
+    value: float
+    year: int
+    unit: str  # "percent" or "share"
+
+
+@dataclass
+class Correction:
+    country: str
+    segment: str
+    year: int
+    old_value: float
+    new_value: float
+    citation: Citation
+    confidence: float
+    reason: str
