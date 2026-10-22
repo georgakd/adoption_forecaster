@@ -22,6 +22,10 @@ class SourceSnippet:
 class SourceStore(Protocol):
     def search(self, query: str, country: str | None = None, year: int | None = None) -> list[SourceSnippet]: ...
 
+    def search_with_total(self, query: str, country: str | None = None, year: int | None = None) -> tuple[list[SourceSnippet], int]:
+        """Like ``search``, plus the number of matches before the result cap (so callers can tell results were cut off)."""
+        ...
+
     def read(self, doc_id: str) -> str: ...
 
 
@@ -37,6 +41,9 @@ class SyntheticSourceStore:
         self.limit = limit
 
     def search(self, query: str, country: str | None = None, year: int | None = None) -> list[SourceSnippet]:
+        return self.search_with_total(query, country, year)[0]
+
+    def search_with_total(self, query: str, country: str | None = None, year: int | None = None) -> tuple[list[SourceSnippet], int]:
         query_tokens = _tokens(query)
         scored = []
         for doc in self._docs.values():
@@ -46,7 +53,7 @@ class SyntheticSourceStore:
             if score or not query_tokens:
                 scored.append((-score, doc.doc_id, doc))
         scored.sort(key=lambda item: item[:2])
-        return [SourceSnippet(d.doc_id, d.publisher, d.country, d.year, d.title) for _, _, d in scored[: self.limit]]
+        return [SourceSnippet(d.doc_id, d.publisher, d.country, d.year, d.title) for _, _, d in scored[: self.limit]], len(scored)
 
     def read(self, doc_id: str) -> str:
         return self._docs[doc_id].text
