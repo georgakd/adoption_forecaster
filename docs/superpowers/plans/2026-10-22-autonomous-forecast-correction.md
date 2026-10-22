@@ -140,8 +140,9 @@
 - Consumes: `generate_world`, `World`, `to_table`, the real predictors/processors (Tasks 1, 2, 5).
 - Produces:
   - `@dataclass SourceDoc` with `doc_id: str`, `publisher: str`, `country: str`, `year: int`, `unit: str` (`"share"` for 0-1 or `"percent"`), `segment: str`, `text: str`, `value: float | None` (ground-truth fields used only by tests and the evaluator, never shown to the agent)
-  - `@dataclass Benchmark` with `module: str`, `world: World`, `baseline: ForecastTable`, `truth: ForecastTable`, `docs: list[SourceDoc]`, `last_year: int`, `pred_year: int`
+  - `@dataclass Benchmark` with `module: str`, `world: World | None` (None for real-data backtests, Task 13), `baseline: ForecastTable`, `truth: ForecastTable`, `docs: list[SourceDoc]`, `last_year: int`, `pred_year: int`
   - `build_benchmark(seed: int, module: str, n_countries: int = 8, noise: float = 0.01, wrong_fraction: float = 0.2, conflict_fraction: float = 0.15) -> Benchmark` (baseline comes from running the real pipeline on the world's truncated inputs, so it fails naturally on injected shocks)
+  - `make_docs(truth: ForecastTable, seed: int, noise: float, wrong_fraction: float, conflict_fraction: float) -> list[SourceDoc]` (the doc generator, reusable on any truth table)
   - `class SourceStore(Protocol)`: `search(query: str, country: str | None = None, year: int | None = None) -> list[SourceSnippet]` and `read(doc_id: str) -> str`, where `SourceSnippet` has `doc_id`, `publisher`, `country`, `year`, `title`
   - `class SyntheticSourceStore` implementing it over `Benchmark.docs`
 
@@ -273,3 +274,23 @@
 - [ ] **Step 4: Run `pytest -v`. Expected: PASS.**
 - [ ] **Step 5: Live run (acceptance).** With the user's `NVIDIA_API_KEY` exported in their shell, run `python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-2 --n-countries 5 --live`, then the same for `age_gender`. Choose a strong tool-calling model from build.nvidia.com and set `correction.model` in `config.yaml` (smoke-test it with one call first). Record the aggregate `mae_before`, `mae_after`, hallucination and violation counts in `docs/CORRECTION_AGENT.md`; report honestly if the live model misses the target.
 - [ ] **Step 6: Commit** `feat: benchmark runner, docs and first live run results`
+
+### Task 13: Real-data backtest from Eurostat (runs after Task 12)
+
+**Files:**
+- Create: `quotas_forecasting/backtest/__init__.py`, `quotas_forecasting/backtest/eurostat_backtest.py`, `tests/e2e/test_real_backtest.py`
+- Modify: `quotas_forecasting/correction/benchmark_cli.py` (add `--real` flag), `pyproject.toml` (register marker `realdata`), `.gitignore` (add `.cache/`), `docs/CORRECTION_AGENT.md`
+
+**Interfaces:**
+- Consumes: `EurostatDataFetcher(last_year_of_observations: int, config: dict).fetch_data() -> bool`, `run_single_module`, the Task 3 emulator fixtures, `to_table`, `make_docs`, `Benchmark`, `SyntheticSourceStore`, `evaluate` (Tasks 2, 3, 5, 6, 7).
+- Produces:
+  - `fetch_eurostat_inputs(cache_dir: Path, last_year: int, config: dict) -> Path`: runs the real fetcher against the GCS emulator, downloads the resulting timestamped CSVs into `<cache_dir>/<Namespace>/input/` and returns `cache_dir`; reuses an existing complete cache without touching the network. Raises `MissingInputFilesError` listing any expected input file (see `config["modules"][...]["files"]`) the fetcher could not produce.
+  - `build_real_backtest(cache_dir: Path, module: str, cut_year: int = 2022, pred_year: int = 2024, seed: int = 0) -> Benchmark`: `truth` is the actual published Eurostat values for years after `cut_year`; `baseline` is the pipeline run with `last_year=cut_year` on inputs truncated at `cut_year`; `docs` come from `make_docs(truth, ...)`, so the numbers are real and only the document wrapping and corruption are synthetic; `world` is `None`. Years where Eurostat has no value are NaN and excluded from MAE.
+
+- [ ] **Step 1: Write failing tests (marker `realdata`, skipped unless `QF_REALDATA=1` and the emulator env vars are set).** `test_fetch_populates_cache_with_all_expected_input_files`; `test_second_fetch_uses_cache_without_network` (monkeypatch `requests.get` to raise); `test_backtest_baseline_error_is_finite_and_sane` (`0 < mae_before < 0.2`, truth has no values at or before `cut_year`); `test_backtest_runs_through_evaluate_with_stub_agent` (`ScriptedClient` proposing nothing gives `mae_after == mae_before`); `test_missing_expected_file_raises_with_its_name` (delete one cached input, expect `MissingInputFilesError` naming it).
+- [ ] **Step 2: Run `QF_REALDATA=1 pytest -m realdata -v` with emulators up. Expected: FAIL.**
+- [ ] **Step 3: Implement the module and the `--real` flag.** If the fetcher cannot reproduce an input file the pipeline needs (a `config.yaml` comment mentions files "provided by GR"), do not fabricate it: finish what works, list the missing files in your report and in `docs/CORRECTION_AGENT.md`, and report DONE_WITH_CONCERNS.
+- [ ] **Step 4: Run `pytest -v` (realdata skipped) and `QF_REALDATA=1 pytest -m realdata -v`. Expected: PASS.**
+- [ ] **Step 5: Live real-data run (controller, same key rule as Task 12).** `python -m quotas_forecasting.correction.benchmark_cli --module education --real --live`; record the aggregate result in `docs/CORRECTION_AGENT.md`.
+- [ ] **Step 6: Commit** `feat: real-data Eurostat backtest`
+
