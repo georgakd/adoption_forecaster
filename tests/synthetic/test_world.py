@@ -107,3 +107,15 @@ def test_written_inputs_parse_with_missing_data_handler(tmp_path, config):
     p = AgeGenderProcessor(config=config)
     assert p.extract_age_groups(ag["Individual type"].iloc[0])
     assert ag.apply(p.extract_gender, axis=1)["gender"].isin(["male", "female"]).all()
+
+
+def test_age_gender_file_is_percent_and_sorted_by_country_then_gender(tmp_path, config):
+    w = generate_world(1)
+    path = write_age_gender_inputs(w, tmp_path)[0]
+    df = pd.read_csv(path)
+    values = df.drop(columns=["country", "Individual type"])
+    assert values.to_numpy().max() > 50 and values.to_numpy().max() <= 100
+    assert list(df["country"].drop_duplicates()) == sorted(df["country"].unique())
+    for _, group in df.groupby("country", sort=False):
+        genders = group["Individual type"].str.startswith("Females").tolist()
+        assert genders == sorted(genders)

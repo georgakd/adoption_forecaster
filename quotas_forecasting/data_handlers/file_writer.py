@@ -147,10 +147,14 @@ class FileWriter:
 
     def _get_local_path(self, output_dir, filename):
         """Convert output_dir to local module-specific path"""
+        clean_output_dir = output_dir.lstrip("./")
+        local_data_dir = self.config["defaults"].get("local_data_dir")
+        if local_data_dir:
+            return os.path.join(local_data_dir, self.namespace, clean_output_dir, filename)
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
         base_path = os.path.abspath(os.path.join(script_dir, ".."))
 
-        clean_output_dir = output_dir.lstrip("./")
         return os.path.join(base_path, self.namespace, clean_output_dir, filename)
 
     def _rename_columns_for_output(self, df, filename, year_of_prediction, last_year_of_observations):

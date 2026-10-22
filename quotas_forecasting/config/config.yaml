@@ -5,6 +5,7 @@
 defaults:
   mode: "prod"
   auto_fetch: false
+  local_data_dir: null  # when set, local mode reads/writes <dir>/<Namespace>/{input,output} instead of the package dir
   bucket_name: "ml-quotas-forecasting"
   project_id: "339766178133"
   bucket_name_external: "universe-bucket-staging" #Andromeda's bucket "universe-bucket-production"---> production

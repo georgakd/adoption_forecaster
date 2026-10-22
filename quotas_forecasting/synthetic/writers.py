@@ -68,9 +68,12 @@ def write_age_gender_inputs(world: World, input_dir: Path) -> list[Path]:
     input_dir = Path(input_dir)
     input_dir.mkdir(parents=True, exist_ok=True)
     df = world.truth_age_gender.copy()
+    # the pipeline pairs gender labels with predictions sorted by (country, gender male-first, age), so rows must already be in that order
+    df = df.assign(_female=df["Individual type"].str.startswith("Females")).sort_values(["country", "_female"], kind="stable").drop(columns="_female")
     keep = ["country", "Individual type"] + [c for c in df.columns[2:] if int(c) <= world.last_year]
     df = df[keep]
     df["country"] = df["country"].replace(NAME_VARIANTS)
+    df[df.columns[2:]] = (df[df.columns[2:]] * 100).round(6)  # Eurostat age/gender files are in percent; the pipeline divides by 100
     path = _path(input_dir, _file_name("age_gender", "age_gender"))
     df.to_csv(path, index=False)
     return [path]

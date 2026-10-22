@@ -43,6 +43,14 @@ class Loader:
 
     def _setup_local_input_folder(self):
         """Create input folder structure for local development"""
+        local_data_dir = self.config["defaults"].get("local_data_dir")
+        if local_data_dir:
+            # Override: read in place from <local_data_dir>/<Namespace>/input, nothing is moved out of the package dir
+            self.local_path = os.path.join(local_data_dir, self.namespace, "input")
+            os.makedirs(self.local_path, exist_ok=True)
+            logger.info(f"Local path set to: {self.local_path}")
+            return
+
         # Copy files from main directory to {module}/input, where module : Age_Gender or Education
         source_input = self.base_path  # Main directory where main.py is
         dest_input = os.path.join(self.base_path, self.namespace, "input")
