@@ -294,3 +294,27 @@
 - [ ] **Step 5: Live real-data run (controller, same key rule as Task 12).** `python -m quotas_forecasting.correction.benchmark_cli --module education --real --live`; record the aggregate result in `docs/CORRECTION_AGENT.md`.
 - [ ] **Step 6: Commit** `feat: real-data Eurostat backtest`
 
+### Task 14: Maths review and alternative forecasting methods (runs after Task 13)
+
+**Files:**
+- Create: `quotas_forecasting/forecasting/experimental/__init__.py`, `quotas_forecasting/forecasting/experimental/gam.py`, `quotas_forecasting/forecasting/experimental/balancing.py`, `quotas_forecasting/backtest/compare.py`, `tests/experimental/test_gam.py`, `tests/experimental/test_balancing.py`, `tests/experimental/test_compare.py`, `docs/MODEL_REVIEW.md`
+- Modify: `pyproject.toml` (add `pygam`), `quotas_forecasting/config/config.yaml` (add `prediction.method: "ensemble"`), `quotas_forecasting/forecasting/predictors.py` (read `prediction.method`; `"ensemble"` is the current behavior)
+
+**Interfaces:**
+- Consumes: the synthetic benchmark (Task 6), the real-data backtest and cache (Task 13), the existing predictors (`predict_random_walk`, `fit_predict_theta`, logistic and LASSO paths in `predictors.py`).
+- Produces:
+  - `gam_forecast(series: pd.Series, horizon: int, monotone: bool = True) -> np.ndarray`: penalized-spline GAM on the logit scale (`pygam`), output clipped to [0, 1], non-decreasing when `monotone`
+  - `class InfeasibleBalanceError(ValueError)`
+  - `entropy_balance_weights(donors: np.ndarray, target: np.ndarray) -> np.ndarray`: non-negative weights over donor rows that sum to 1, minimize KL divergence to uniform, and reproduce the target's feature means; solved through the dual with `scipy.optimize`; raises `InfeasibleBalanceError` when the target is outside the donors' convex hull
+  - `kernel_balance_weights(donors: np.ndarray, target: np.ndarray, length_scale: float | None = None) -> np.ndarray`: simplex weights minimizing the RBF-kernel mean discrepancy to the target (median-heuristic length scale when `None`)
+  - `proxy_forecast(target_history: pd.Series, donors: pd.DataFrame, method: str) -> pd.Series` with `method` in `{"entropy", "kernel"}`: weighted donor trajectories shifted to the target's last observed level
+  - `compare_methods(tables: list[Benchmark], methods: list[str], origins: list[int]) -> pd.DataFrame`: rolling-origin MAE per `(module, method)`, with `methods` drawn from `{"ensemble", "gam", "entropy_proxy", "kernel_proxy"}`
+
+- [ ] **Step 1: Write the maths review as failing tests first, then the document.** For each suspect below write a test or backtest experiment that confirms or refutes it, then record the verdict and the evidence in `docs/MODEL_REVIEW.md` (verdict, evidence, decision). Suspects already noticed while reading the code: (a) `predictors.py:90-91` applies the same backward interpolation twice, with a `# ?` comment; (b) `config.yaml` blend weights are fixed (Education Theta 0.7 / RW 0.3; Age_Gender 1/3 each) with no recorded justification; (c) the LASSO proxy path is inactive because `target_markets: {}`; (d) clipping to [0, 1] versus the logistic ceiling `K_max` 0.995; (e) `replace(0, np.nan)` on Education ratios; (f) LASSO CV with very few proxy rows. Add any further issue found, each backed by evidence, not assertion.
+- [ ] **Step 2: Write failing tests.** `test_gam_stays_in_unit_interval_and_is_monotone`; `test_gam_recovers_logistic_truth_within_tolerance` (synthetic logistic series, 2-year horizon, error below the ensemble's on the same series or a fixed 0.02 bound, whichever the review shows is meaningful); `test_entropy_weights_are_nonnegative_sum_to_one_and_match_target_means` (1e-6); `test_entropy_raises_when_target_outside_hull`; `test_kernel_weights_lie_on_simplex`; `test_compare_methods_is_deterministic_and_has_one_row_per_module_method`; `test_default_method_leaves_goldens_unchanged` (the Task 2 golden tests pass untouched with `prediction.method: "ensemble"`).
+- [ ] **Step 3: Run `pytest tests/experimental -v`. Expected: FAIL.**
+- [ ] **Step 4: Implement the experimental module and `compare_methods`; wire `prediction.method` in `predictors.py` with `"ensemble"` as the default and no change to its numerical results.**
+- [ ] **Step 5: Run the comparison on the synthetic dev seeds and on the real-data backtest (rolling origins 2019-2022), then write the results table and the decision into `docs/MODEL_REVIEW.md`.** Decision rule: a method becomes an available option only if it beats the current ensemble's MAE on both the synthetic and the real backtests across origins by a stated margin; otherwise it is documented and left unused. No default is changed in this task. Note in the document that kernel and entropy balancing are survey-weighting tools and are used here only as donor-weighting for proxy forecasts; weighting an actual respondent sample to the quotas is out of this repo's scope.
+- [ ] **Step 6: Run `pytest -v`. Expected: PASS, goldens unchanged.**
+- [ ] **Step 7: Commit** `feat: maths review and experimental GAM and balancing forecasters`
+

@@ -94,6 +94,7 @@ and from a benchmark that scores it, not from a person reading results.
   flag (builder's call on the default; the baseline-only path must keep working).
   A prod-path test with the emulators covers corrected output.
 - A real-data backtest from the public Eurostat API is added (user approved): cut the real series at 2022, forecast 2024, score against actually published values; source documents stay synthetic wrappers around real numbers. It runs after the synthetic benchmark.
+- A maths review of the existing statistical models, with experimental GAM, entropy-balancing and kernel-balancing alternatives compared by rolling-origin backtest, is added (user request). Any method that wins becomes an option behind `prediction.method`; the default stays `ensemble` and the goldens stay unchanged.
 - The user has an NVIDIA API key. One live-model benchmark run is part of "done"
   for milestone 1, alongside the stub-model tests. The key is read from the
   `NVIDIA_API_KEY` environment variable only; it must never be written to the
