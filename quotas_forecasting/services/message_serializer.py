@@ -2,13 +2,12 @@
 Message Serializer for protobuf communication with Andromeda
 """
 
-import json
 from datetime import datetime, timezone
 from typing import Optional
 from .modelling_files_pb2 import ModellingOutputFile, FileType
 from google.cloud import pubsub_v1
-from google.oauth2 import service_account
-from google.cloud import secretmanager
+
+from quotas_forecasting.services.gcp_clients import get_credentials
 
 from quotas_forecasting.config.logging_config import get_logger
 
@@ -39,9 +38,9 @@ class MessageSerializer:
         if self.topic_name and self.sub_project_id and pubsub_v1:
             try:
                 if self.service_acc:
-                    credentials = self._get_credentials_from_secret_manager()
+                    credentials = get_credentials(config)
                     self.publisher = pubsub_v1.PublisherClient(credentials=credentials)
-                    logger.info(f"Using service account from Secret Manager: {credentials.service_account_email}")
+                    logger.info(f"Using credentials: {getattr(credentials, 'service_account_email', type(credentials).__name__)}")
                 else:
                     raise ValueError("Service account email is required for Pub/Sub publishing")
 
@@ -54,25 +53,6 @@ class MessageSerializer:
         else:
             self.publisher = None
             self.topic_path = None
-
-    def _get_credentials_from_secret_manager(self):
-        """Get service account credentials from Secret Manager"""
-        try:
-            client = secretmanager.SecretManagerServiceClient()
-            secret_name = f"projects/{self.project_id}/secrets/quotas-forecasting-sa-key/versions/latest"
-            logger.error("SECRET_NAME_USED=%s", secret_name)
-
-            logger.info(f"Accessing secret: {secret_name}")
-            response = client.access_secret_version(request={"name": secret_name})
-            key_data = json.loads(response.payload.data.decode("UTF-8"))
-
-            credentials = service_account.Credentials.from_service_account_info(key_data)
-            logger.info("Successfully retrieved credentials from Secret Manager")
-            return credentials
-
-        except Exception as e:
-            logger.error(f"Failed to get credentials from Secret Manager: {e}")
-            raise
 
     def create_message(
         self,

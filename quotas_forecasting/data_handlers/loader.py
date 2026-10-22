@@ -12,6 +12,7 @@ import shutil
 import re
 
 from quotas_forecasting.config.logging_config import get_logger
+from quotas_forecasting.services.gcp_clients import emulator_enabled, get_credentials
 
 logger = get_logger(__name__)
 
@@ -32,9 +33,12 @@ class Loader:
             self._setup_local_input_folder()
         elif self.mode == "prod":
             try:
-                credentials, project = default()
-                self.client = storage.Client(credentials=credentials, project=self.project_id)
-                self.client = storage.Client(project=self.project_id)
+                if emulator_enabled():
+                    self.client = storage.Client(credentials=get_credentials(config), project=self.project_id)
+                else:
+                    credentials, project = default()
+                    self.client = storage.Client(credentials=credentials, project=self.project_id)
+                    self.client = storage.Client(project=self.project_id)
                 self.bucket = self.client.bucket(self.bucket_name)
                 logger.info(f"Initialized GCS client for project={self.project_id}, bucket={self.bucket_name}")
             except Exception as e:

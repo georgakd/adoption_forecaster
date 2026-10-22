@@ -20,6 +20,7 @@ import os
 from google.cloud import storage
 from google.api_core import exceptions as gapi_exceptions
 from quotas_forecasting.config.logging_config import get_logger
+from quotas_forecasting.services.gcp_clients import get_credentials
 from quotas_forecasting.forecasting.utils import validate_values
 
 logger = get_logger(__name__)
@@ -75,7 +76,7 @@ class FileWriter:
 
             try:
                 temp_serializer = MessageSerializer(config=self.config)
-                self.credentials = temp_serializer._get_credentials_from_secret_manager()
+                self.credentials = get_credentials(self.config)
 
                 self.client = storage.Client(project=self.project_id, credentials=self.credentials)
                 self.bucket_int = self.client.bucket(self.bucket_name)

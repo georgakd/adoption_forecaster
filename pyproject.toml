@@ -39,6 +39,9 @@ pydantic = "^2.0.0"
 pre-commit = "^4.2.0"  # Only needed during development
 pytest = "^8.0.0"
 
+[tool.pytest.ini_options]
+markers = ["emulators: prod path against GCS and Pub/Sub emulators (needs STORAGE_EMULATOR_HOST and PUBSUB_EMULATOR_HOST)"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
