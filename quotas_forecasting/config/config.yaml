@@ -224,7 +224,7 @@ correction:
   enabled: false
   max_yoy_change: 0.10
   citation_tolerance: 0.005
-  model: null
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
   max_iterations_per_segment: 6
   max_llm_retries: 3
   max_suspects: 25  # the planner's suspects beyond this many are logged as ignored, not researched
