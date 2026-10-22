@@ -219,3 +219,11 @@ prediction:
     historical_years_back: 6  # Years back for historical data display
     previous_year_offset: 1  # Offset for previous year calculations
     adjustment_year_offset: 2  # Offset for year adjustments
+
+correction:
+  enabled: false
+  max_yoy_change: 0.10
+  citation_tolerance: 0.005
+  model: null
+  max_iterations_per_segment: 6
+  max_llm_retries: 3
