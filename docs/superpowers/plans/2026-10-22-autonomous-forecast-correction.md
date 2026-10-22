@@ -318,3 +318,24 @@
 - [ ] **Step 6: Run `pytest -v`. Expected: PASS, goldens unchanged.**
 - [ ] **Step 7: Commit** `feat: maths review and experimental GAM and balancing forecasters`
 
+### Task 15: Adaptive year-over-year cap calibrated on real observations (runs after Task 14, before the final review)
+
+**Files:**
+- Create: `quotas_forecasting/correction/caps.py`, `tests/correction/test_caps.py`
+- Modify: `quotas_forecasting/correction/constraints.py`, `quotas_forecasting/correction/tools.py`, `quotas_forecasting/correction/evaluation.py`, `quotas_forecasting/correction/agent.py` and `quotas_forecasting/correction/prompts.py` (show the per-segment cap to the model), `quotas_forecasting/config/config.yaml`, `tests/e2e/test_real_backtest.py` (offline check on the cache), `docs/CORRECTION_AGENT.md`
+
+**Interfaces:**
+- Consumes: `ForecastTable`, `check_constraints`, `introduced_violations`, `CorrectionSession`, `evaluate` (Tasks 5, 7, 9).
+- Produces:
+  - config block `correction.yoy_cap` = `{mode: "adaptive", quantile: 0.9, k: 3.0, floor: 0.03, ceiling: 0.30}`; `mode: "fixed"` keeps today's scalar `max_yoy_change` (0.10) for every segment
+  - `compute_yoy_caps(baseline: ForecastTable, settings: dict, fallback: float) -> dict[tuple[str, str], float]`, keyed `(country, segment)`: `cap = clamp(k * max(own_q, peer_q), floor, ceiling)` where `own_q` is the `quantile` of that series' historical absolute year-over-year changes and `peer_q` the same quantile pooled over the other countries' series of the same segment; only HISTORICAL cells (`is_forecast == False`) are used, so the cap can never depend on forecast values or truth; a series with fewer than 3 historical changes uses `peer_q` alone; a segment with no usable history at all gets `fallback`
+  - `check_constraints(baseline, corrected, module, max_yoy_change, yoy_caps: dict | None = None)`: a per-key cap from `yoy_caps` overrides the scalar when present; with `yoy_caps=None` behavior is identical to today
+  - `CorrectionSession.caps: dict` computed once from the baseline at construction and used by the gate (`propose_correction`, `introduced_violations`) and by `evaluate` through the same `compute_yoy_caps` call; the segment brief and planner summary shown to the model state the per-segment cap
+
+- [ ] **Step 1: Write failing tests.** `test_caps_use_only_historical_cells` (changing every forecast cell leaves the caps identical); `test_volatile_segment_gets_wider_cap_than_stable_one` (synthetic table with one volatile and one stable segment); `test_floor_and_ceiling_are_respected`; `test_short_history_falls_back_to_peers_then_to_scalar`; `test_fixed_mode_reproduces_scalar_cap`; `test_check_constraints_uses_per_key_cap_and_none_is_unchanged` (the Task 5 verifier tests pass untouched); `test_gate_uses_adaptive_cap` (a move above the stable segment's cap is rejected while the same move in the volatile segment is accepted); `test_evaluate_counts_against_adaptive_caps`; `test_prompts_state_per_segment_cap_not_a_global_number`; offline real-data checks marked `realdata` and reading `.cache/eurostat` (no network): on the published Age_Gender 2023-2024 moves the fixed 0.10 cap flags 15 and the adaptive default flags at most 2; on published Education it flags 0; and the Education adaptive median cap is below 0.10 (it must be stricter than the fixed cap where data are stable).
+- [ ] **Step 2: Run `pytest tests/correction/test_caps.py -v`. Expected: FAIL.**
+- [ ] **Step 3: Implement `caps.py` and thread `yoy_caps` through the verifier, gate, evaluator and prompts; default `mode: "adaptive"`; flag-off pipeline behavior and the Task 2 goldens are unchanged.**
+- [ ] **Step 4: Validate out of sample.** The default `k` and `quantile` were chosen after looking at origin 2022; also report, without re-tuning, the numbers for the earlier origin (cut 2021, pred 2023) on both modules, and re-run the stub benchmark on synthetic dev seeds (no regression in the gate) and the stub `--real` runs; write the table into `docs/CORRECTION_AGENT.md` from obtained output only, and state plainly that the cap is a guard against unattended large moves, not a statistical test.
+- [ ] **Step 5: Run `pytest -v`. Expected: PASS.**
+- [ ] **Step 6: Commit** `feat: adaptive year-over-year cap calibrated on historical observations`
+
