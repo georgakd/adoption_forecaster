@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from quotas_forecasting.correction.citations import verify_citation
+from quotas_forecasting.correction.citations import citation_supports_correction
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.sources import SourceStore
 from quotas_forecasting.correction.types import Correction, ForecastTable
@@ -32,7 +32,7 @@ def _mae(predicted: ForecastTable, truth: ForecastTable) -> float:
 
 def evaluate(benchmark: Benchmark, corrected: ForecastTable, corrections: list[Correction], store: SourceStore, config: dict) -> EvalReport:
     settings = config["correction"]
-    hallucinated = sum(not verify_citation(c.citation, store, settings["citation_tolerance"]) for c in corrections)
+    hallucinated = sum(not citation_supports_correction(c, store, settings["citation_tolerance"]) for c in corrections)
     violations = check_constraints(benchmark.baseline, corrected, benchmark.module, settings["max_yoy_change"])
     return EvalReport(
         mae_before=_mae(benchmark.baseline, benchmark.truth),
