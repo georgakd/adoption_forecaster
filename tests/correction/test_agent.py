@@ -1,6 +1,6 @@
 import copy
 import json
-import re
+import logging
 
 import numpy as np
 import pandas as pd
@@ -13,8 +13,13 @@ from quotas_forecasting.correction.llm import LLMResponse, LLMUnavailableError, 
 from quotas_forecasting.correction.prompts import planner_system_prompt, researcher_system_prompt
 from quotas_forecasting.correction.sources import SyntheticSourceStore
 from quotas_forecasting.synthetic.benchmark import build_benchmark
-
-KEY = ["country", "segment", "year"]
+from tests.correction.scripting import KEY
+from tests.correction.scripting import call as _call
+from tests.correction.scripting import citation as _citation
+from tests.correction.scripting import doc_for as _doc_for
+from tests.correction.scripting import plan as _plan
+from tests.correction.scripting import propose as _propose
+from tests.correction.scripting import research_script as _research_script
 
 
 @pytest.fixture(scope="module")
@@ -32,48 +37,6 @@ def edu():
 @pytest.fixture(scope="module")
 def age():
     return build_benchmark(0, "age_gender")
-
-
-# ---- script helpers (tests only): compose real, verifying quotes from the documents' text as read through the store ----
-
-
-def _doc_for(bench, country, segment, year):
-    """The document closest to truth for a key (the test oracle may look at truth; the agent never does)."""
-    truth = bench.truth.set_index(KEY)["value"][(country, segment, year)]
-    docs = [d for d in bench.docs if (d.country, d.segment, d.year) == (country, segment, year)]
-    return min(docs, key=lambda d: abs(d.value - truth))
-
-
-def _citation(store, doc_id, country):
-    """Citation dict for the sentence of the document that names ``country`` (the target sentence), parsed from the text itself."""
-    sentence = next(s for s in re.split(r"(?<=\.)\s+", store.read(doc_id)) if country in s)
-    year = int(re.search(r"\b(?:19|20)\d{2}\b", sentence).group())
-    number = re.search(r"(\d+\.\d)%|([01]\.\d{3})", sentence)
-    value, unit = (round(float(number.group(1)) / 100, 6), "percent") if number.group(1) else (float(number.group(2)), "share")
-    return {"doc_id": doc_id, "quoted_text": sentence, "value": value, "year": year, "unit": unit}
-
-
-def _plan(*suspects):
-    return LLMResponse(text=json.dumps({"suspects": [{"country": c, "segment": s} for c, s in suspects]}))
-
-
-def _call(call_id, name, **arguments):
-    return LLMResponse(text=None, tool_calls=[ToolCall(call_id, name, arguments)])
-
-
-def _propose(call_id, country, segment, citation, new_value=None):
-    args = {"country": country, "segment": segment, "year": citation["year"], "new_value": citation["value"] if new_value is None else new_value}
-    return _call(call_id, "propose_correction", **args, citation=citation, confidence=0.8, reason="published figure")
-
-
-def _research_script(bench, store, country, segment):
-    """search -> read every forecast-year doc -> propose each forecast year in order -> stop."""
-    years = sorted(bench.baseline.loc[bench.baseline["is_forecast"], "year"].unique())
-    docs = [_doc_for(bench, country, segment, int(y)) for y in years]
-    script = [_call("s1", "search_sources", query=f"{segment} {country}", country=country)]
-    script.append(LLMResponse(text=None, tool_calls=[ToolCall(f"r{i}", "read_source", {"doc_id": d.doc_id}) for i, d in enumerate(docs)]))
-    script += [_propose(f"p{i}", country, segment, _citation(store, d.doc_id, country)) for i, d in enumerate(docs)]
-    return script + [LLMResponse(text="Done: corrections proposed.")]
 
 
 def _cells(table, country):
@@ -363,3 +326,66 @@ def test_run_is_deterministic(edu, config):
     results = [run_correction(edu.baseline, "education", store, ScriptedClient(script), config) for _ in range(2)]
     pd.testing.assert_frame_equal(results[0].corrected, results[1].corrected)
     assert results[0].log == results[1].log
+
+
+# ---- hardening: suspect cap, plan JSON extraction, source-count lookup ----
+
+
+def test_suspects_beyond_max_suspects_are_ignored_not_researched(edu, config):
+    store = SyntheticSourceStore(edu.docs)
+    capped = copy.deepcopy(config)
+    capped["correction"]["max_suspects"] = 2
+    items = [
+        {"country": "France", "segment": "secondary"},
+        {"country": "Atlantis", "segment": "secondary"},  # invalid: ignored, does not count against the cap
+        {"country": "France", "segment": "tertiary"},  # duplicate of France/secondary after the tertiary mapping
+        {"country": "Poland", "segment": "secondary"},
+        {"country": "Spain", "segment": "secondary"},  # over the cap
+    ]
+    done = LLMResponse(text="nothing to change")
+    llm = ScriptedClient([LLMResponse(text=json.dumps({"suspects": items})), done, done])  # a third research call would exhaust the script
+    result = run_correction(edu.baseline, "education", store, llm, capped)
+
+    assert result.error is None and len(llm.calls) == 1 + 2
+    plan = next(entry for entry in result.log if entry["event"] == "plan")
+    assert plan["suspects"] == [["France", "secondary"], ["Poland", "secondary"]]
+    assert plan["ignored"] == [items[1], items[4]]
+    assert [entry["country"] for entry in result.log if entry["event"] == "done"] == ["France", "Poland"]
+
+
+def test_config_caps_suspects_at_25(config):
+    assert config["correction"]["max_suspects"] == 25
+    assert config["correction"]["on_failure"] == "fallback_to_baseline"
+
+
+def test_plan_followed_by_prose_with_braces_parses(edu, config):
+    llm = ScriptedClient([LLMResponse(text='{"suspects": []} (see {note})')])
+    result = run_correction(edu.baseline, "education", SyntheticSourceStore(edu.docs), llm, config)
+    assert result.error is None and len(llm.calls) == 1
+    assert any(entry["event"] == "plan" for entry in result.log)
+
+
+def test_trailing_brace_or_prose_only_reply_is_retried_within_bound(edu, config):
+    attempts = 1 + config["correction"]["max_llm_retries"]
+    bad = [LLMResponse(text="Plan follows: {"), LLMResponse(text="France looks odd")] * attempts
+    llm = ScriptedClient(bad[:attempts])
+    result = run_correction(edu.baseline, "education", SyntheticSourceStore(edu.docs), llm, config)
+    assert len(llm.calls) == attempts and result.error and "plan" in result.error
+    assert [entry["event"] for entry in result.log].count("plan_invalid") == attempts
+
+
+class _NoCountsStore(SyntheticSourceStore):
+    def search_with_total(self, query, country=None, year=None):
+        raise RuntimeError("index unavailable")
+
+
+def test_source_count_failure_drops_counts_line_and_continues(edu, config, caplog):
+    store = _NoCountsStore(edu.docs)
+    llm = ScriptedClient([_plan(("France", "secondary")), LLMResponse(text="nothing to change")])
+    with caplog.at_level(logging.WARNING, logger="quotas_forecasting.correction.agent"):
+        result = run_correction(edu.baseline, "education", store, llm, config)
+
+    assert result.error is None and len(llm.calls) == 2
+    summary = llm.calls[0]["messages"][1]["content"]
+    assert "France | secondary" in summary and "Source documents per country" not in summary
+    assert any(r.levelno == logging.WARNING and "source counts" in r.getMessage() for r in caplog.records)

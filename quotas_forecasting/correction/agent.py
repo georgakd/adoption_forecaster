@@ -10,6 +10,7 @@ Message flow:
 """
 
 import json
+import logging
 import math
 from dataclasses import dataclass, field
 
@@ -24,6 +25,8 @@ from quotas_forecasting.correction.types import Correction, ForecastTable
 MAX_SUMMARY_ROWS = 60
 HISTORY_SHOWN = 3  # last historical values per row; the trend is the slope over these
 ERROR_MAX_CHARS = 200
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,11 +97,13 @@ def _segment_brief(table: ForecastTable, module: str, country: str, segment: str
     )
 
 
-def _parse_plan(text: str | None, module: str, editable: set[tuple[str, str]]) -> tuple[list[tuple[str, str]], list]:
-    """Suspects in the model's order (deduplicated, only editable segments; education tertiary maps to secondary) and ignored items."""
-    if not text or "{" not in text or "}" not in text:
+def _parse_plan(text: str | None, module: str, editable: set[tuple[str, str]], max_suspects: int) -> tuple[list[tuple[str, str]], list]:
+    """Suspects in the model's order (deduplicated, only editable segments; education tertiary maps to secondary), at most
+    ``max_suspects`` of them, and the ignored items (invalid ones and valid ones beyond the cap). The JSON object is decoded from the
+    first ``{``; anything after it (prose, even with braces) is ignored."""
+    if not text or "{" not in text:
         raise ValueError("reply contains no JSON object")
-    data = json.loads(text[text.index("{") : text.rindex("}") + 1])
+    data, _ = json.JSONDecoder().raw_decode(text, text.index("{"))
     if not isinstance(data, dict) or not isinstance(data.get("suspects"), list):
         raise ValueError('JSON must be an object with a "suspects" list')
     suspects, ignored = [], []
@@ -109,15 +114,23 @@ def _parse_plan(text: str | None, module: str, editable: set[tuple[str, str]]) -
             continue
         if module == "education" and segment == "tertiary":
             segment = "secondary"
-        if (country, segment) in editable and (country, segment) not in suspects:
-            suspects.append((country, segment))
-        elif (country, segment) not in editable:
+        if (country, segment) not in editable:
             ignored.append(item)
+        elif (country, segment) not in suspects:
+            if len(suspects) < max_suspects:
+                suspects.append((country, segment))
+            else:
+                ignored.append(item)
     return suspects, ignored
 
 
-def _source_counts(store: SourceStore, countries) -> dict[str, int]:
-    return {country: store.search_with_total("", country=country)[1] for country in countries}
+def _source_counts(store: SourceStore, countries) -> dict[str, int] | None:
+    """Documents per country for the planner summary; ``None`` (the line is dropped) when the store cannot count."""
+    try:
+        return {country: store.search_with_total("", country=country)[1] for country in countries}
+    except Exception as exc:  # noqa: BLE001 - the counts are a planning hint only; losing them must not end the run
+        logger.warning("Could not get source counts for the planner summary (%s); continuing without them", type(exc).__name__)
+        return None
 
 
 def _plan(session: CorrectionSession, module: str, llm: LLMClient, settings: dict, log: list[dict]) -> list[tuple[str, str]] | None:
@@ -131,7 +144,7 @@ def _plan(session: CorrectionSession, module: str, llm: LLMClient, settings: dic
     for attempt in range(attempts):
         response = llm.chat(messages, [])
         try:
-            suspects, ignored = _parse_plan(response.text, module, set(editable))
+            suspects, ignored = _parse_plan(response.text, module, set(editable), settings["max_suspects"])
         except ValueError as exc:
             log.append({"event": "plan_invalid", "attempt": attempt + 1, "reason": str(exc)})
             messages += [

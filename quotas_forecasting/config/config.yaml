@@ -227,3 +227,5 @@ correction:
   model: null
   max_iterations_per_segment: 6
   max_llm_retries: 3
+  max_suspects: 25  # the planner's suspects beyond this many are logged as ignored, not researched
+  on_failure: "fallback_to_baseline"  # informational: on any agent failure the baseline (plus corrections accepted so far) is kept
