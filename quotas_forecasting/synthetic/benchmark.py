@@ -57,10 +57,13 @@ class _Capture:
         return wrapper
 
 
-def run_pipeline_on_inputs(data_dir: Path, module: str, last_year: int, pred_year: int) -> ForecastTable:
-    """Run the real local pipeline on the inputs in ``<data_dir>/<Namespace>/input`` and return the predictor's frame as a table."""
+def run_pipeline_on_inputs(data_dir: Path, module: str, last_year: int, pred_year: int, config: dict | None = None) -> ForecastTable:
+    """Run the real local pipeline on the inputs in ``<data_dir>/<Namespace>/input`` and return the predictor's frame as a table.
+
+    ``config`` (default: the repo config) lets experiments run the same pipeline with other settings, e.g. other blend weights.
+    """
     namespace = module.title()
-    config = copy.deepcopy(load_config())
+    config = copy.deepcopy(config if config is not None else load_config())
     config["defaults"]["local_data_dir"] = str(data_dir)
     config["defaults"]["auto_fetch"] = False
     config["pubsub"]["enable_notifications"] = False

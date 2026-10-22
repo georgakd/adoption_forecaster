@@ -184,6 +184,9 @@ validation:
 
 # prediction algorithm settings
 prediction:
+  # Forecasting method. Only "ensemble" (Theta/random walk/logistic blend) is accepted; the experimental GAM and balancing
+  # forecasters did not pass the decision rule in docs/MODEL_REVIEW.md and are not wired in.
+  method: "ensemble"
   # Random walk settings
   random_walk:
     lookback_period: 3  # Number of years to look back for drift calculation (diff()[-3:])

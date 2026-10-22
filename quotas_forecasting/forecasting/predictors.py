@@ -432,6 +432,16 @@ class AgeGenderPredictor:
 # FACTORY FUNCTION
 # ============================================================================
 
+PREDICTION_METHODS = ("ensemble",)  # see docs/MODEL_REVIEW.md: no experimental method passed the decision rule
+
+
+def prediction_method(config):
+    """The configured ``prediction.method`` (``"ensemble"`` when absent); raises ValueError for any other value."""
+    method = (config or {}).get("prediction", {}).get("method", "ensemble")
+    if method not in PREDICTION_METHODS:
+        raise ValueError(f"Unknown prediction.method: {method}. Must be one of {PREDICTION_METHODS}")
+    return method
+
 
 def get_predictor(module_type, mode="local", pred_year=None, last_year=None, loader=None, config=None):
     """
@@ -448,6 +458,7 @@ def get_predictor(module_type, mode="local", pred_year=None, last_year=None, loa
     Returns:
         EducationPredictor or AgeGenderPredictor: Appropriate predictor instance
     """
+    prediction_method(config)  # "ensemble" is the only method; the predictors below implement it
     if module_type == "education":
         return EducationPredictor(
             mode=mode,
