@@ -21,6 +21,8 @@ from quotas_forecasting.data_handlers.loader import Loader
 from quotas_forecasting.data_handlers.file_writer import FileWriter
 from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.fetch_data.fetch_data_from_Eurostat import EurostatDataFetcher
+from quotas_forecasting.correction.llm import MissingApiKeyError
+from quotas_forecasting.correction.pipeline import NoSourceStoreError, prepare_correction
 import sys
 
 # Set up logging with color support
@@ -29,7 +31,7 @@ from quotas_forecasting.config.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def run_single_module(module_name, mode, bucket_name, project_id, pred_year, last_year, config=None):
+def run_single_module(module_name, mode, bucket_name, project_id, pred_year, last_year, config=None, correction_store=None, correction_llm=None):
     """
     Helper function to run a single module with proper setup.
 
@@ -41,7 +43,11 @@ def run_single_module(module_name, mode, bucket_name, project_id, pred_year, las
         pred_year: Prediction year from args
         last_year: Last year from args
         config: Configuration object (loaded once in main)
+        correction_store: Source store for the correction agent (built from config when correction is enabled and this is None)
+        correction_llm: LLM client for the correction agent (built from config when correction is enabled and this is None)
     """
+    # with correction enabled, a missing NVIDIA_API_KEY or source store fails here, before any forecasting work starts
+    correction_store, correction_llm = prepare_correction(config, correction_store, correction_llm)
 
     # Create module-specific instances
     namespace = module_name.title()  # "education" -> "Education", "age_gender" -> "Age_Gender"
@@ -70,10 +76,12 @@ def run_single_module(module_name, mode, bucket_name, project_id, pred_year, las
     # Run the module
     if module_name == "education":
         processor.run_education_pipeline(
-            loader, writer, predictor, pred_year, last_year
+            loader, writer, predictor, pred_year, last_year, correction_store=correction_store, correction_llm=correction_llm
         )
     elif module_name == "age_gender":
-        processor.run_age_gender_pipeline(loader, writer, predictor, pred_year, last_year)
+        processor.run_age_gender_pipeline(
+            loader, writer, predictor, pred_year, last_year, correction_store=correction_store, correction_llm=correction_llm
+        )
     else:
         raise ValueError(f"Unknown module: {module_name}")
 
@@ -126,6 +134,13 @@ if __name__ == "__main__":
             f"Difference between --pred-year ({args.pred_year}) and --last-year ({args.last_year}) must be exactly {required_diff} years, got {year_diff}"
         )
 
+    # correction agent dependencies are built once, before any fetching or forecasting
+    try:
+        correction_store, correction_llm = prepare_correction(config, None, None)
+    except (MissingApiKeyError, NoSourceStoreError, ValueError) as e:
+        logger.error(f"Correction agent cannot start: {e}")
+        sys.exit(1)
+
     # fetch Eurostat data
     if config["defaults"]["auto_fetch"]:
         try:
@@ -155,7 +170,17 @@ if __name__ == "__main__":
     modules = ["education", "age_gender"] if module == "both" else [module]
     for module_name in modules:
         logger.info(f"Running {module_name} module...")
-        run_single_module(module_name, mode, bucket_name, project_id, pred_year, last_year, config)
+        run_single_module(
+            module_name,
+            mode,
+            bucket_name,
+            project_id,
+            pred_year,
+            last_year,
+            config,
+            correction_store=correction_store,
+            correction_llm=correction_llm,
+        )
 
     if module == "both":
         logger.info("Both modules completed successfully!")

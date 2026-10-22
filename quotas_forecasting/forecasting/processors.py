@@ -19,6 +19,7 @@ from quotas_forecasting.data_handlers.proxy_handlers import ProxyHandler
 from quotas_forecasting.data_handlers.missing_data_handlers import MissingDataHandler
 from quotas_forecasting.data_handlers.data_validators import DataValidator
 from quotas_forecasting.config.logging_config import get_logger
+from quotas_forecasting.correction.pipeline import maybe_correct
 
 
 pd.set_option("future.no_silent_downcasting", True)
@@ -68,8 +69,10 @@ class EducationProcessor:
             age_group,
         )
 
-    def run_education_pipeline(self, loader, writer, predictor, year_of_predictions, last_year_of_observations):
-        """Run education pipeline for all age groups"""
+    def run_education_pipeline(
+        self, loader, writer, predictor, year_of_predictions, last_year_of_observations, correction_store=None, correction_llm=None
+    ):
+        """Run education pipeline for all age groups (correction_store/correction_llm are used only when correction.enabled is true)"""
         education_data = {}
 
         regex_patterns = self.education_config["processing"]["regex_patterns"]
@@ -110,6 +113,10 @@ class EducationProcessor:
                 education_df_merged = self.missing_data_handler.merge_education_levels(education_df_filled).astype(float).replace(0, np.nan)
                 # Run predictions
                 education_df_merged = predictor.predict(education_df_merged, last_year_of_observations, year_of_predictions)
+                # correction agent (no-op unless correction.enabled): cited corrections to forecast cells, before saving
+                education_df_merged = maybe_correct(
+                    education_df_merged, "education", last_year_of_observations, self.config, correction_store, correction_llm
+                )
 
                 education_data[age_group] = education_df_merged
                 logger.info(f"Successfully completed {age_group} education pipeline. Final shape: {education_data[age_group].shape}")
@@ -263,7 +270,9 @@ class AgeGenderProcessor:
         individual_type = individual_type.replace("_", " to ").capitalize()
         return pd.Series([country, individual_type])
 
-    def run_age_gender_pipeline(self, loader, writer, predictor, year_of_predictions, last_year_of_observations):
+    def run_age_gender_pipeline(
+        self, loader, writer, predictor, year_of_predictions, last_year_of_observations, correction_store=None, correction_llm=None
+    ):
         """
         Run the complete gender and age prediction pipeline.
 
@@ -273,6 +282,8 @@ class AgeGenderProcessor:
             predictor: Prediction model instance
             year_of_predictions: Target year for predictions
             last_year_of_observations: Last year of available data
+            correction_store: Source store for the correction agent (used only when correction.enabled is true)
+            correction_llm: LLM client for the correction agent (used only when correction.enabled is true)
         """
         country_mapping = self.config["modules"]["education"]["processing"]["country_mapping"]
         df_age_gender_path = self.config_agegender["files"]["age_gender"]
@@ -289,6 +300,8 @@ class AgeGenderProcessor:
         logger.info(f"Age_gender data loaded successfully. Shape: {df_age_gender.shape}")
         # Run the predictor with pre-loaded data
         frame = predictor.run_with_data(df_age_gender, last_year_of_observations)
+        # correction agent (no-op unless correction.enabled): cited corrections to forecast cells, before the rename/fillna/save
+        frame = maybe_correct(frame, "age_gender", last_year_of_observations, self.config, correction_store, correction_llm)
         previous_year_offset = self.config["prediction"]["preprocessing"]["previous_year_offset"]
         # convert all columns to integer type
         frame.rename(
