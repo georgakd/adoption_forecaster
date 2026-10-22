@@ -6,9 +6,15 @@ import json
 import logging
 import pandas as pd
 from typing import List, Dict, Any
-from client import AIClient
-from tools import list_countries, list_gender_age_groups, analyze_country_trend, adjust_country_projections, list_all_combinations
-from schemas import (
+from quotas_forecasting.AI_adjustments.client import AIClient
+from quotas_forecasting.AI_adjustments.tools import (
+    list_countries,
+    list_gender_age_groups,
+    analyze_country_trend,
+    adjust_country_projections,
+    list_all_combinations,
+)
+from quotas_forecasting.AI_adjustments.schemas import (
     validate_tool_call_input,
     ListCountriesOutput,
     ListIndividualsOutput,
@@ -17,12 +23,12 @@ from schemas import (
     AnalyzeCountryTrendToolOutput,
     AdjustCountryProjectionsOutput,
 )
-from utils import create_tools_schema
-from prompts import get_education_system_prompt, get_age_gender_system_prompt
-from rules import get_rules
-from tool_registry import get_registry, register_all_tools
-from message_history import MessageHistory
-from workflow_enforcer import WorkflowEnforcer
+from quotas_forecasting.AI_adjustments.utils import create_tools_schema
+from quotas_forecasting.AI_adjustments.prompts import get_education_system_prompt, get_age_gender_system_prompt
+from quotas_forecasting.AI_adjustments.rules import get_rules
+from quotas_forecasting.AI_adjustments.tool_registry import get_registry, register_all_tools
+from quotas_forecasting.AI_adjustments.message_history import MessageHistory
+from quotas_forecasting.AI_adjustments.workflow_enforcer import WorkflowEnforcer
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)

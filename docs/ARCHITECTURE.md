@@ -79,7 +79,7 @@ Handles the actual forecasting using multiple strategies:
 
 ### 6. Optional: AI projection corrections (`AI_adjustments/`)
 
-Not part of the default forecasting flow above. A **separate CLI** (`quotas_forecasting/AI_adjustments/main.py`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
+Not part of the default forecasting flow above. A **separate CLI** (`python -m quotas_forecasting.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
 
 ---
 

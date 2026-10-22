@@ -320,7 +320,7 @@ def validate_tool_call_input(tool_name: str, args: dict) -> tuple[bool, Optional
         ...     print(f"Validated country: {validated.country}")
     """
     # Use tool registry for validation
-    from tool_registry import get_registry
+    from quotas_forecasting.AI_adjustments.tool_registry import get_registry
 
     registry = get_registry()
 

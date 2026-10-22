@@ -57,7 +57,7 @@ CSV → AI_adjustments/main.py → load_config + Secret Manager (OpenAI key)
 
 ### CLI (standalone)
 
-Entry point **`quotas_forecasting/AI_adjustments/main.py`** (not **`quotas_forecasting/main.py`**). Flags: `--module`, `--mode`, `--adjusted-year`; interactive CSV selection; outputs under `output/` including optional **`adjustment_log_*.json`**. **Copy-paste commands and argument reference:** [module README — Usage](../quotas_forecasting/AI_adjustments/README.md#usage).
+Entry point **`python -m quotas_forecasting.AI_adjustments.main`** (not **`quotas_forecasting/main.py`**). Flags: `--module`, `--mode`, `--adjusted-year`; interactive CSV selection; outputs under `output/` including optional **`adjustment_log_*.json`**. **Copy-paste commands and argument reference:** [module README — Usage](../quotas_forecasting/AI_adjustments/README.md#usage).
 
 ### Configuration & secrets
 
@@ -93,7 +93,7 @@ Files live under **`quotas_forecasting/AI_adjustments/`**. **Directory tree, rol
 1. **LLM behavior:** Non-deterministic (unless temperature and sampling are tightly controlled); may misinterpret edge cases; **cost and latency** scale with iterations and data size.
 2. **Not a forecaster:** This module **does not** replace `quotas_forecasting`’s statistical forecasting; it **adjusts supplied CSVs** after the fact.
 3. **Not wired into default forecasting `main.py`:** The core pipeline does **not** call `AI_adjustments`; operations must run the **separate CLI** (or integrate explicitly if product requires it).
-4. **Dependencies:** OpenAI + optional RAG stack are listed in **`AI_adjustments/requirements.txt`**; the main **`pyproject.toml`** set may not include all of these — install extras for this module as documented in **`AI_adjustments/README.md`**.
+4. **Dependencies:** OpenAI and pydantic are declared in the main **`pyproject.toml`**; no separate install step is needed.
 5. **RAG quality:** Retrieval depends on feedback CSV coverage, embedding quality, and the **similarity threshold**; no semantic match ⇒ no comment for that lookup (graceful degradation).
 6. **Feedback filename:** A misnamed feedback file (anything other than **`feedback_{adjusted_year - 1}_{module}.csv`** under **`input/`**) is **not** loaded; the CLI **does not fail** and may look like a normal run. Always confirm the log (e.g. feedback loaded vs “No feedback file found”) or the exact path above.
 7. **Safety caps:** **`max_iterations`** in the agent prevents infinite loops; very large datasets may hit limits or require batching strategies (not built-in).

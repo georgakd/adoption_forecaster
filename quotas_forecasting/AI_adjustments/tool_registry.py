@@ -125,7 +125,7 @@ def register_all_tools(agent_instance: Any) -> None:
     Args:
         agent_instance: Instance of CorrectionAgent with handler methods
     """
-    from schemas import (
+    from quotas_forecasting.AI_adjustments.schemas import (
         ListCountriesInput,
         ListIndividualsInput,
         ListAllCombinationsInput,

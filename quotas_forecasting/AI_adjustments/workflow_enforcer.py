@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Any, Optional
 
-from schemas import (
+from quotas_forecasting.AI_adjustments.schemas import (
     AgentOrchestrationMetadata,
     AnalyzeCountryTrendOutput,
     AnalyzeCountryTrendToolOutput,

@@ -12,12 +12,12 @@ import pandas as pd
 from pathlib import Path
 import logging
 from typing import Optional, Tuple
-from client import AIClient
-from utils import get_projection_columns, get_historical_columns, validate_historical_data, report_changes
-from agent import apply_corrections
-from utils import load_feedback, get_feedback_csv_path
-from feedback_rag import FeedbackRAGRetriever
-from gcp_secrets import get_openai_api_key
+from quotas_forecasting.AI_adjustments.client import AIClient
+from quotas_forecasting.AI_adjustments.utils import get_projection_columns, get_historical_columns, validate_historical_data, report_changes
+from quotas_forecasting.AI_adjustments.agent import apply_corrections
+from quotas_forecasting.AI_adjustments.utils import load_feedback, get_feedback_csv_path
+from quotas_forecasting.AI_adjustments.feedback_rag import FeedbackRAGRetriever
+from quotas_forecasting.AI_adjustments.gcp_secrets import get_openai_api_key
 from quotas_forecasting.config.config_loader import load_config
 
 
@@ -136,13 +136,14 @@ def main():
     logger.info("Quotas Forecasting AI - Projection Corrector")
     logger.info("=" * 60)
 
+    args = parse_arguments()
+
     config = load_config()
     project_id = config["defaults"]["project_id"]
     secret_name = config["secrets"]["openai_api_key"]
     open_api_key = get_openai_api_key(project_id, secret_name)
     client = AIClient(api_key=open_api_key)
 
-    args = parse_arguments()
     # mode = args.mode
     module = args.module
     adjusted_year = args.adjusted_year

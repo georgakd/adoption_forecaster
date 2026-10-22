@@ -48,20 +48,11 @@ AI_adjustments/
 
 ### Setup
 
-1. From the **repository root**, install the main project with Poetry, then install **this module’s** extra packages **into the same Poetry environment** you use for `poetry run python` (a bare `pip install` can target the wrong interpreter and cause `ModuleNotFoundError` for `openai` / `pydantic`):
-
-```bash
-poetry install
-poetry run pip install -r quotas_forecasting/AI_adjustments/requirements.txt
-```
-
-   Equivalent: `poetry shell` and then `pip install -r quotas_forecasting/AI_adjustments/requirements.txt` in that shell.
-
-   (`openai`, `pydantic`, and related pins live in `AI_adjustments/requirements.txt`; the root `requirements.txt` does not include the OpenAI client.)
+1. From the **repository root**, install the main project with Poetry (`poetry install`). `openai` and `pydantic` are regular dependencies in `pyproject.toml`; no separate requirements file is needed.
 
 1. **API key:** Loaded at runtime from **GCP Secret Manager** (see below). A `.env` `OPENAI_API_KEY` is **not** read by the current `main.py` path.
 
-2. Prepare input data: place prediction CSV files in **`AI_adjustments/input/`**.
+2. Prepare input data: place prediction CSV files in **`input/`** under the directory you run the CLI from (paths are relative to the current working directory; typically the repository root).
 
 ### OpenAI API key (local and prod)
 
@@ -78,14 +69,13 @@ The AI adjustments module needs an OpenAI API key for the correction agent and o
 
 ### Command Line Interface
 
-Run the CLI with **`quotas_forecasting/AI_adjustments` as the current working directory** (so local imports `client`, `agent`, etc. resolve). From the **repository root**:
+Run the CLI as a module from the **repository root**:
 
 ```bash
-cd quotas_forecasting/AI_adjustments
-poetry run python main.py --module <module> --mode <mode> --adjusted-year <year>
+poetry run python -m quotas_forecasting.AI_adjustments.main --module <module> --mode <mode> --adjusted-year <year>
 ```
 
-If you do not use Poetry, activate a venv that has both the **`quotas_forecasting`** package and **`AI_adjustments/requirements.txt`** installed, then run `python main.py` from the same directory.
+If you do not use Poetry, activate a venv with the project dependencies installed and run `python -m quotas_forecasting.AI_adjustments.main ...` instead.
 
 #### Arguments
 
@@ -100,8 +90,7 @@ If you do not use Poetry, activate a venv that has both the **`quotas_forecastin
 #### Example
 
 ```bash
-cd quotas_forecasting/AI_adjustments
-poetry run python main.py --module education --mode local --adjusted-year 2026
+poetry run python -m quotas_forecasting.AI_adjustments.main --module education --mode local --adjusted-year 2026
 ```
 
 ### Workflow

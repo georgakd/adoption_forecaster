@@ -55,7 +55,6 @@ quotas_forecasting/
 │
 ├── Dockerfile                   # Docker image definition for cloud deployment
 ├── docker-run.sh                # Script to build and run Docker container
-├── cloudbuild.yaml              # Cloud Build pipeline definition
 ├── requirements.txt             # Python dependencies
 ├── pyproject.toml               # Project metadata and dependencies (for Poetry)
 ├── poetry.lock                  # Poetry lock file
@@ -86,7 +85,7 @@ The **AI adjustments** subsystem corrects exported **prediction CSVs** using Ope
 | How to run the CLI, layout, components | [quotas_forecasting/AI_adjustments/README.md](quotas_forecasting/AI_adjustments/README.md) |
 | Researcher feedback + embeddings (RAG) | [docs/ARCHITECTURE_RAG.md](docs/ARCHITECTURE_RAG.md) |
 
-**Relationship to the main pipeline:** `quotas_forecasting/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from `quotas_forecasting/AI_adjustments/` after installing its extra dependencies (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.
+**Relationship to the main pipeline:** `quotas_forecasting/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from the repository root with `python -m quotas_forecasting.AI_adjustments.main ...` (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.
 
 **Not the same as** deterministic `age_groups_tweak` in `forecasting/utils.py`, which applies a fixed age-band rule inside the core Age/Gender pipeline.
 
@@ -205,7 +204,7 @@ This is a fast, lightweight check that prevents broken Dockerfiles or Python sta
 
 ### 2. Post-Merge: Full Pipeline Run + Image Push  (push to main)
 
-**File:** `.github/workflows/post-merge-run-forecast.yml`
+**File:** `.github/workflows/post-merge-run-full-pipeline.yml`
 **Trigger:**  Runs once after a **PR is** **merged** into `main`
 
 **What it does:**
