@@ -57,28 +57,33 @@ class _Capture:
         return wrapper
 
 
-def _run_pipeline(world: World, module: str) -> ForecastTable:
-    """Run the real local pipeline on the world's visible (<= last_year) inputs and return the predictor's frame as a table."""
+def run_pipeline_on_inputs(data_dir: Path, module: str, last_year: int, pred_year: int) -> ForecastTable:
+    """Run the real local pipeline on the inputs in ``<data_dir>/<Namespace>/input`` and return the predictor's frame as a table."""
     namespace = module.title()
-    with tempfile.TemporaryDirectory() as data_dir:
-        config = copy.deepcopy(load_config())
-        config["defaults"]["local_data_dir"] = data_dir
-        config["defaults"]["auto_fetch"] = False
-        config["pubsub"]["enable_notifications"] = False
-        writer_fn = write_education_inputs if module == "education" else write_age_gender_inputs
-        writer_fn(world, Path(data_dir) / namespace / "input")
-        loader = Loader(namespace=namespace, mode="local", config=config)
-        writer = FileWriter(namespace=namespace, mode="local", pred_year=world.pred_year, config=config)
-        predictor = get_predictor(module, mode="local", pred_year=world.pred_year, last_year=world.last_year, loader=loader, config=config)
-        capture = _Capture(predictor, "predict" if module == "education" else "run_with_data")
-        processor = get_processor(module, config=config)
-        if module == "education":
-            processor.run_education_pipeline(loader, writer, capture, world.pred_year, world.last_year)
-        else:
-            processor.run_age_gender_pipeline(loader, writer, capture, world.pred_year, world.last_year)
+    config = copy.deepcopy(load_config())
+    config["defaults"]["local_data_dir"] = str(data_dir)
+    config["defaults"]["auto_fetch"] = False
+    config["pubsub"]["enable_notifications"] = False
+    loader = Loader(namespace=namespace, mode="local", config=config)
+    writer = FileWriter(namespace=namespace, mode="local", pred_year=pred_year, config=config)
+    predictor = get_predictor(module, mode="local", pred_year=pred_year, last_year=last_year, loader=loader, config=config)
+    capture = _Capture(predictor, "predict" if module == "education" else "run_with_data")
+    processor = get_processor(module, config=config)
+    if module == "education":
+        processor.run_education_pipeline(loader, writer, capture, pred_year, last_year)
+    else:
+        processor.run_age_gender_pipeline(loader, writer, capture, pred_year, last_year)
     if capture.frame is None:
         raise RuntimeError(f"{module} pipeline produced no predictions")
-    return to_table(capture.frame, module, world.last_year)
+    return to_table(capture.frame, module, last_year)
+
+
+def _run_pipeline(world: World, module: str) -> ForecastTable:
+    """Run the real local pipeline on the world's visible (<= last_year) inputs and return the predictor's frame as a table."""
+    with tempfile.TemporaryDirectory() as data_dir:
+        writer_fn = write_education_inputs if module == "education" else write_age_gender_inputs
+        writer_fn(world, Path(data_dir) / module.title() / "input")
+        return run_pipeline_on_inputs(Path(data_dir), module, world.last_year, world.pred_year)
 
 
 def _pipeline_segment(segment: str) -> str:

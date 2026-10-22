@@ -6,6 +6,7 @@ import pytest
 from quotas_forecasting.correction import benchmark_cli
 from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient, get_llm_client  # noqa: F401
 from quotas_forecasting.correction.oracle import build_oracle_client
+from quotas_forecasting.synthetic.benchmark import build_benchmark
 
 ARGS = ["--module", "education", "--seeds", "0", "--n-countries", "5"]
 
@@ -63,3 +64,20 @@ def test_json_has_no_secret_when_env_key_is_set(tmp_path, monkeypatch, capsys):
     assert secret not in out.out + out.err
     assert secret not in (next(tmp_path.glob("*.json"))).read_text()
     assert "NVIDIA_API_KEY" not in (next(tmp_path.glob("*.json"))).read_text()
+
+
+def test_real_flag_runs_stub_oracle_on_the_backtest_and_records_years(tmp_path, monkeypatch, capsys):
+    calls = []
+
+    def fake_backtest(cache_dir, module, cut_year, pred_year, seed):
+        calls.append((module, cut_year, pred_year, seed))
+        bench = build_benchmark(seed, module, n_countries=5)
+        bench.world = None  # real backtests have no synthetic world
+        return bench
+
+    monkeypatch.setattr(benchmark_cli, "build_real_backtest", fake_backtest)
+    code = benchmark_cli.main(["--module", "education", "--real", "--seeds", "0", "--out", str(tmp_path)])
+    data = _results(tmp_path)
+    assert code == 0 and calls == [("education", 2022, 2024, 0)]
+    assert data["config"]["source"] == "real-backtest" and data["config"]["cut_year"] == 2022 and data["config"]["pred_year"] == 2024
+    assert data["config"]["mode"] == "stub" and data["aggregate"]["n_corrections"] > 0

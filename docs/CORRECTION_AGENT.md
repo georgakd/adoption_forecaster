@@ -82,6 +82,52 @@ A milestone-2 store implements the `SourceStore` Protocol in `sources.py`:
 
 Snippets expose only `doc_id, publisher, country, year, title`. Then implement `get_source_store(config)` to return it.
 
+## Real-data backtest (Eurostat)
+
+`--real` replaces the synthetic world with real Eurostat data: the pipeline gets the inputs cut at `--cut-year` (default 2022) and forecasts `--pred-year` (default 2024; `pred_year - cut_year` must equal `validation.year_difference`, 2). It is scored against the values Eurostat actually published for the years after the cut.
+
+```bash
+# stub (oracle) mode, offline once the cache exists
+python -m quotas_forecasting.correction.benchmark_cli --module education --real --seeds 0-1
+# live mode (same key rule as above)
+python -m quotas_forecasting.correction.benchmark_cli --module education --real --live
+```
+
+The JSON `config` records `"source": "real-backtest"`, `cut_year` and `pred_year` (`n_countries` is `null`: all fetched countries are used).
+
+**What is real and what is synthetic.** Baseline and truth numbers are real. The baseline is the real pipeline run with `last_year=cut_year` on the inputs truncated at `cut_year`. The truth comes from a second run on the inputs up to `pred_year`, using its observed (non-forecast) cells for the years after the cut. For age_gender this is the published share of internet users per country, gender and age group. For education it is the pipeline's tertiary/secondary share of internet users, which the pipeline derives from three published series (internet use by education level, population by education level, population totals). It is not a single published number. Cells where Eurostat has no value (on the 2026-10-22 cache: Switzerland 2024, in both modules) are NaN and are left out of the MAE. The source documents are still **synthetic prose wrappers around these real numbers** (`make_docs`, same noise, wrong and conflict fractions as the synthetic benchmark). Seeds only change the documents, so `mae_before` is the same for every seed. `Benchmark.world` is `None`.
+
+**What the fetcher could reproduce.** `fetch_eurostat_inputs` runs the repo's own `EurostatDataFetcher` against the GCS emulator, then copies the uploaded files to `.cache/eurostat/<Namespace>/input/`. The emulator is required: without `STORAGE_EMULATOR_HOST` it refuses to run, so no real GCP call can happen. All four input files listed under `modules.*.files` were reproduced, so both modules run:
+
+| Module | File | Eurostat dataset | Reproduced |
+|---|---|---|---|
+| education | `total_population_by_age_range` | DEMO_PJAN | yes |
+| education | `population_ratios_by_education` | EDAT_LFSE_03 | yes |
+| education | `internet_penetration_ratios_by_education` | ISOC_CI_IFP_IU | yes |
+| age_gender | `internet_penetration_by_age_group_and_gender` | ISOC_CI_IFP_IU | yes |
+
+The fetcher's log line says "EDAT_LFS_9903", but that label is stale: the code fetches `eurostat.dataset_codes[1]`, which is `EDAT_LFSE_03`. If a future fetch cannot produce an expected file, `MissingInputFilesError` lists the missing `<Namespace>/<base name>` entries. No file is fabricated.
+
+**Cache.** The current cache was fetched on **2026-10-22**, with `last_year=2024` (`.cache/eurostat/manifest.json`). Eurostat update stamps (the file-name timestamps): ISOC_CI_IFP_IU 2026-04-17, EDAT_LFSE_03 2026-09-10, DEMO_PJAN 2026-09-25. A complete cache is reused with no network and no emulator, which keeps runs deterministic. `.cache/` is git-ignored.
+
+To refresh the cache (about 7 minutes, mostly EDAT_LFSE_03), delete `.cache/eurostat/`, start the emulators, and rerun the realdata tests (or any `--real` run):
+
+```bash
+docker compose -f docker-compose.emulators.yml up -d
+export STORAGE_EMULATOR_HOST=http://localhost:4553 PUBSUB_EMULATOR_HOST=localhost:8685
+QF_REALDATA=1 .venv/bin/python -m pytest -m realdata -v
+docker compose -f docker-compose.emulators.yml down -v
+```
+
+**Stub results on the 2026-10-22 cache** (cut 2022, predict 2024, seeds 0-1):
+
+| Module | mae_before | mae_after (oracle) | Violations | Gate |
+|---|---|---|---|---|
+| education | 0.0107 | 0.0085 (-20.6%) | 0 | passed |
+| age_gender | 0.0178 | 0.0153 (-13.8%) | 2 per seed | failed |
+
+The age_gender violations come from the real pipeline's own baseline, not from the agent. Its 2023 forecast for Ireland, ages 65-74 (both genders), jumps more than `max_yoy_change` (0.10) above the last observed year, by +0.147 and +0.178. `evaluate` counts violations in the corrected table, so they show up even when the agent changes nothing. On real data, the zero-violation part of the stub gate is therefore unreachable for age_gender.
+
 ## Live results
 
 _(to be filled after the first live run)_

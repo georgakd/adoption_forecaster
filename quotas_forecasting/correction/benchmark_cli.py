@@ -1,8 +1,10 @@
-"""Benchmark runner: ``python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-4 [--live] [--heldout]``.
+"""Benchmark runner: ``python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-4 [--live] [--heldout] [--real]``.
 
 Stub mode (default) drives the agent with an oracle ScriptedClient and enforces the hard gate (MAE improves, zero hallucinated
 citations, zero violations; exit 1 otherwise). Live mode uses the configured NVIDIA model and only reports the gate (exit 0 when the
-run completed, 2 when NVIDIA_API_KEY or the model is missing). Results go to ``<out>/<UTC timestamp>.json``; no secret is ever written.
+run completed, 2 when NVIDIA_API_KEY or the model is missing). ``--real`` swaps the synthetic world for the real-data Eurostat backtest
+(cached inputs cut at ``--cut-year``, scored on the published values up to ``--pred-year``; each seed only changes the synthetic
+documents). Results go to ``<out>/<UTC timestamp>.json``; no secret is ever written.
 """
 
 import argparse
@@ -15,6 +17,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from quotas_forecasting.backtest.eurostat_backtest import DEFAULT_CACHE_DIR, build_real_backtest
 from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.correction.agent import run_correction
 from quotas_forecasting.correction.evaluation import evaluate
@@ -89,6 +92,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--heldout", action="store_true", help="use the held-out seeds (100+) when --seeds is not given")
     p.add_argument("--live", action="store_true", help="use the real NVIDIA model instead of the oracle stub")
     p.add_argument("--n-countries", type=int, default=DEFAULT_N_COUNTRIES)
+    p.add_argument("--real", action="store_true", help="real-data Eurostat backtest instead of the synthetic world (--n-countries ignored)")
+    p.add_argument("--cut-year", type=int, default=2022, help="--real: last observed year given to the pipeline")
+    p.add_argument("--pred-year", type=int, default=2024, help="--real: forecast year (pred_year - cut_year must be 2)")
+    p.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="--real: Eurostat input cache")
     p.add_argument("--model", default=None, help="override correction.model in memory (the config file is not changed)")
     p.add_argument("--out", default="benchmark_results")
     return p
@@ -119,7 +126,10 @@ def main(argv: list[str] | None = None) -> int:
     started = time.monotonic()
     per_seed = []
     for seed in seeds:
-        bench = build_benchmark(seed, args.module, n_countries=args.n_countries)
+        if args.real:
+            bench = build_real_backtest(Path(args.cache_dir), args.module, cut_year=args.cut_year, pred_year=args.pred_year, seed=seed)
+        else:
+            bench = build_benchmark(seed, args.module, n_countries=args.n_countries)
         store = SyntheticSourceStore(bench.docs)
         llm = counter if counter else build_oracle_client(bench, store, config["correction"]["max_suspects"])
         result = run_correction(bench.baseline, args.module, store, llm, config)
@@ -132,7 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     out = {
         "timestamp": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "config": {"mode": mode, "module": args.module, "model": config["correction"]["model"] if args.live else None,
-                   "n_countries": args.n_countries, "seeds": seeds},
+                   "n_countries": None if args.real else args.n_countries, "seeds": seeds,
+                   "source": "real-backtest" if args.real else "synthetic",
+                   "cut_year": args.cut_year if args.real else None, "pred_year": args.pred_year if args.real else None},
         "per_seed": per_seed,
         "aggregate": agg,
         "gate_passed": gate,
