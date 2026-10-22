@@ -43,6 +43,46 @@ def _key(v: Violation) -> tuple:
     return (v.kind, v.country, v.segment, v.year)
 
 
+WORSEN_EPSILON = 1e-12  # float noise only
+
+
+def _severity(v: Violation, table: ForecastTable) -> float | None:
+    """How far ``table`` is from satisfying ``v``'s rule (bigger is worse); None for kinds without a magnitude (historical_changed)."""
+
+    def value(segment: str, year: int) -> float:
+        cell = table.loc[(table["country"] == v.country) & (table["segment"] == segment) & (table["year"] == year), "value"]
+        return float(cell.iloc[0]) if len(cell) else math.nan
+
+    if v.kind == "yoy_cap":
+        return abs(value(v.segment, v.year) - value(v.segment, v.year - 1))
+    if v.kind == "bounds":
+        x = value(v.segment, v.year)
+        return math.inf if math.isnan(x) else max(-x, x - 1.0, 0.0)
+    if v.kind == "sum_to_one":
+        return abs(value("secondary", v.year) + value("tertiary", v.year) - 1.0)
+    return None
+
+
+def introduced_violations(
+    baseline: ForecastTable, before: ForecastTable, after: ForecastTable, module: str, max_yoy_change: float
+) -> list[Violation]:
+    """Violations of ``after`` that ``before`` did not have, or had less severely (yoy |change|, distance outside [0, 1], |sum - 1|).
+
+    A violation already present in ``before`` is exempt only if ``after`` does not make it worse; historical_changed is exempt if present.
+    """
+    existing = {_key(v): v for v in check_constraints(baseline, before, module, max_yoy_change)}
+    blocked = []
+    for v in check_constraints(baseline, after, module, max_yoy_change):
+        old = existing.get(_key(v))
+        if old is None:
+            blocked.append(v)
+            continue
+        new_severity, old_severity = _severity(v, after), _severity(old, before)
+        if new_severity is not None and new_severity > old_severity + WORSEN_EPSILON:
+            blocked.append(Violation(v.kind, v.country, v.segment, v.year, f"worsened from {old_severity:.6f} to {new_severity:.6f}: {v.detail}"))
+    return blocked
+
+
 class CorrectionSession:
     """Holds the working table for one module and exposes the agent's tools; ``corrections``/``rejections`` record every decision."""
 
@@ -125,11 +165,10 @@ class CorrectionSession:
             tertiary = tentative.index[(tentative["country"] == country) & (tentative["segment"] == "tertiary") & (tentative["year"] == year)]
             if len(tertiary) == 1 and not math.isnan(tentative.at[tertiary[0], "value"]):
                 tentative.at[tertiary[0], "value"] = 1.0 - float(new_value)
-        existing = {_key(v) for v in check_constraints(self.baseline, table, self.module, self.max_yoy_change)}
-        introduced = [v for v in check_constraints(self.baseline, tentative, self.module, self.max_yoy_change) if _key(v) not in existing]
+        introduced = introduced_violations(self.baseline, table, tentative, self.module, self.max_yoy_change)
         if introduced:
             details = "; ".join(f"{v.kind} at {v.country}/{v.segment}/{v.year} ({v.detail})" for v in introduced)
-            return reject(f"would introduce constraint violation(s): {details}")
+            return reject(f"would introduce or worsen constraint violation(s): {details}")
 
         self.working = tentative
         self.corrections.append(correction)

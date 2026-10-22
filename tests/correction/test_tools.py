@@ -10,7 +10,7 @@ import pytest
 from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.tools import CorrectionSession, Rejection, tool_schemas
+from quotas_forecasting.correction.tools import CorrectionSession, Rejection, introduced_violations, tool_schemas
 from quotas_forecasting.synthetic.benchmark import build_benchmark
 from quotas_forecasting.synthetic.sources import SourceDoc, format_value
 
@@ -53,6 +53,9 @@ DOCS = [
     _doc("es-26-oob", "Spain", 2026, 1.2),
     _doc("es-24", "Spain", 2024, 0.62),
     _doc("it-26", "Italy", 2026, 0.55),
+] + [
+    _doc(f"pt-{year}-{value:.3f}", "Portugal", year, value)
+    for year, value in [(2025, 0.7), (2026, 0.8), (2025, 0.9), (2026, 0.95), (2025, 1.0), (2025, 0.55), (2026, 0.7), (2025, 0.6), (2025, 0.5)]
 ]
 
 
@@ -240,3 +243,64 @@ def test_tool_schemas_match_method_signatures():
     citation = schemas[2]["function"]["parameters"]["properties"]["citation"]
     assert set(citation["required"]) == {"doc_id", "quoted_text", "value", "year", "unit"} == set(citation["properties"])
     json.dumps(schemas)
+
+
+def _secondary_changes(table, country):
+    values = table[(table["country"] == country) & (table["segment"] == "secondary")].sort_values("year")["value"].to_numpy()
+    return np.abs(np.diff(values))
+
+
+def _propose_pt(session, year, value):
+    return _propose(session, f"pt-{year}-{value:.3f}", country="Portugal")
+
+
+def test_reviewer_sequence_cannot_push_an_over_cap_cell_further(session):
+    baseline_worst = _secondary_changes(session.baseline, "Portugal").max()
+    results = [_propose_pt(session, year, value) for year, value in [(2025, 0.7), (2026, 0.8), (2025, 0.9), (2026, 0.95), (2025, 1.0)]]
+    assert [r["accepted"] for r in results] == [False] * 5
+    assert all("yoy_cap" in r["reason"] and "Portugal" in r["reason"] for r in results)
+    assert "Portugal/secondary/2025" in results[0]["reason"]
+    pd.testing.assert_frame_equal(session.working, _table())
+    assert _secondary_changes(session.working, "Portugal").max() <= baseline_worst + 1e-12
+
+
+def test_existing_yoy_violation_may_shrink_but_never_grow(session):
+    baseline_worst = _secondary_changes(session.baseline, "Portugal").max()
+    steps = [((2025, 0.7), False), ((2025, 0.55), True), ((2026, 0.7), False), ((2025, 0.6), False), ((2025, 0.5), True)]
+    for (year, value), expected in steps:
+        result = _propose_pt(session, year, value)
+        assert result["accepted"] is expected, (year, value, result["reason"])
+        assert _secondary_changes(session.working, "Portugal").max() <= baseline_worst + 1e-12
+    assert _value(session.working, "Portugal", "secondary", 2025) == 0.5
+    assert _value(session.working, "Portugal", "tertiary", 2025) == pytest.approx(0.5)
+
+
+def _helper_table(sec_2025, ter_2025):
+    table = _table()
+    table = table[table["country"] == "Spain"].reset_index(drop=True)
+    table.loc[(table["segment"] == "secondary") & (table["year"] == 2025), "value"] = sec_2025
+    table.loc[(table["segment"] == "tertiary") & (table["year"] == 2025), "value"] = ter_2025
+    return table
+
+
+@pytest.mark.parametrize("after,blocked", [((1.04, 0.0), False), ((1.05, 0.0), False), ((1.06, 0.0), True)])
+def test_helper_bounds_violation_may_not_move_further_out(after, blocked):
+    # unreachable via propose_correction: new_value outside [0, 1] is rejected earlier and derived tertiary is always in [0, 1]
+    baseline = before = _helper_table(1.05, 0.0)
+    kinds = [(v.kind, v.segment) for v in introduced_violations(baseline, before, _helper_table(*after), "education", 10.0)]
+    assert (("bounds", "secondary") in kinds) is blocked
+
+
+@pytest.mark.parametrize("after,blocked", [((0.6, 0.45), False), ((0.6, 0.5), False), ((0.6, 0.55), True)])
+def test_helper_sum_to_one_violation_may_not_grow(after, blocked):
+    # unreachable via propose_correction: accepting secondary rewrites tertiary as 1 - secondary, so the sum is exact
+    baseline = before = _helper_table(0.6, 0.5)
+    kinds = [v.kind for v in introduced_violations(baseline, before, _helper_table(*after), "education", 10.0)]
+    assert ("sum_to_one" in kinds) is blocked
+
+
+def test_helper_new_historical_change_blocks():
+    baseline = _table()
+    after = baseline.copy()
+    after.loc[(after["country"] == "Spain") & (after["year"] == 2024), "value"] = 0.3
+    assert {v.kind for v in introduced_violations(baseline, baseline, after, "education", 10.0)} == {"historical_changed"}
