@@ -1,10 +1,11 @@
+import pandas as pd
 import pytest
 
 from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.correction.evaluation import evaluate
 from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.types import Citation, Correction
-from quotas_forecasting.synthetic.benchmark import build_benchmark
+from quotas_forecasting.correction.types import TABLE_COLUMNS, Citation, Correction
+from quotas_forecasting.synthetic.benchmark import Benchmark, build_benchmark
 
 
 @pytest.fixture(scope="module")
@@ -83,3 +84,40 @@ def test_mae_is_per_group_then_averaged_not_pooled(bench, config):
     from quotas_forecasting.correction.evaluation import _mae
 
     assert _mae(pred, b.truth) == pytest.approx(0.25)
+
+
+SEGMENT = "Male, 16 to 24"
+
+
+def _yoy_bench(v2025, v2026):
+    """age_gender table with one segment: 2024 observed 0.5; the baseline's 2025 forecast already breaks the 0.10 yoy cap."""
+    rows = [("Spain", SEGMENT, 2024, 0.5, False), ("Spain", SEGMENT, 2025, v2025, True), ("Spain", SEGMENT, 2026, v2026, True)]
+    table = pd.DataFrame(rows, columns=TABLE_COLUMNS)
+    return Benchmark("age_gender", None, table, table.copy(), [], 2024, 2026)
+
+
+def _with(bench, year, value):
+    table = bench.baseline.copy()
+    table.loc[table["year"] == year, "value"] = value
+    return table
+
+
+def test_baseline_violation_is_reported_separately_not_as_agent_violation(config):
+    bench = _yoy_bench(0.65, 0.66)
+    report = evaluate(bench, bench.baseline.copy(), [], SyntheticSourceStore([]), config)
+    assert (report.violations, report.baseline_violations) == (0, 1)
+
+
+@pytest.mark.parametrize(
+    "year,value,introduced",
+    [
+        (2026, 0.80, True),  # new: 0.65 -> 0.80 breaks the cap where the baseline did not
+        (2025, 0.70, True),  # worsens the existing 2024 -> 2025 jump (0.15 -> 0.20)
+        (2025, 0.62, False),  # reduces the existing jump (0.15 -> 0.12): still a violation, but not the agent's
+    ],
+)
+def test_only_introduced_or_worsened_violations_count(config, year, value, introduced):
+    bench = _yoy_bench(0.65, 0.66)
+    report = evaluate(bench, _with(bench, year, value), [], SyntheticSourceStore([]), config)
+    assert report.baseline_violations == 1
+    assert (report.violations >= 1) is introduced and (report.violations == 0) is not introduced

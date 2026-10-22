@@ -1,10 +1,15 @@
-"""Evaluation harness: MAE against truth before/after correction, plus hallucinated-citation and constraint-violation counts."""
+"""Evaluation harness: MAE against truth before/after correction, plus hallucinated-citation and constraint-violation counts.
+
+``violations`` counts only violations the corrections introduced or worsened (the same rule ``propose_correction`` enforces);
+violations already in the baseline forecast are reported separately as ``baseline_violations``.
+"""
 
 from dataclasses import dataclass
 
 from quotas_forecasting.correction.citations import citation_supports_correction
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.sources import SourceStore
+from quotas_forecasting.correction.tools import introduced_violations
 from quotas_forecasting.correction.types import Correction, ForecastTable
 from quotas_forecasting.synthetic.benchmark import Benchmark
 
@@ -18,6 +23,7 @@ class EvalReport:
     hallucinated_citations: int
     violations: int
     n_corrections: int
+    baseline_violations: int
 
 
 def _mae(predicted: ForecastTable, truth: ForecastTable) -> float:
@@ -33,11 +39,13 @@ def _mae(predicted: ForecastTable, truth: ForecastTable) -> float:
 def evaluate(benchmark: Benchmark, corrected: ForecastTable, corrections: list[Correction], store: SourceStore, config: dict) -> EvalReport:
     settings = config["correction"]
     hallucinated = sum(not citation_supports_correction(c, store, settings["citation_tolerance"]) for c in corrections)
-    violations = check_constraints(benchmark.baseline, corrected, benchmark.module, settings["max_yoy_change"])
+    base, module, cap = benchmark.baseline, benchmark.module, settings["max_yoy_change"]
+    violations = introduced_violations(base, base, corrected, module, cap)
     return EvalReport(
         mae_before=_mae(benchmark.baseline, benchmark.truth),
         mae_after=_mae(corrected, benchmark.truth),
         hallucinated_citations=hallucinated,
         violations=len(violations),
         n_corrections=len(corrections),
+        baseline_violations=len(check_constraints(base, base, module, cap)),
     )

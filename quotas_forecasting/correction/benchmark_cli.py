@@ -1,7 +1,7 @@
 """Benchmark runner: ``python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-4 [--live] [--heldout] [--real]``.
 
 Stub mode (default) drives the agent with an oracle ScriptedClient and enforces the hard gate (MAE improves, zero hallucinated
-citations, zero violations; exit 1 otherwise). Live mode uses the configured NVIDIA model and only reports the gate (exit 0 when the
+citations, zero introduced violations; exit 1 otherwise). Live mode uses the configured NVIDIA model and only reports the gate (exit 0 when the
 run completed, 2 when NVIDIA_API_KEY or the model is missing). ``--real`` swaps the synthetic world for the real-data Eurostat backtest
 (cached inputs cut at ``--cut-year``, scored on the published values up to ``--pred-year``; each seed only changes the synthetic
 documents). Results go to ``<out>/<UTC timestamp>.json``; no secret is ever written.
@@ -63,6 +63,7 @@ def _aggregate(per_seed: list[dict]) -> dict:
         "relative_mae_change": (after - before) / before if before else float("nan"),
         "hallucinated_citations": sum(r["hallucinated_citations"] for r in per_seed),
         "violations": sum(r["violations"] for r in per_seed),
+        "baseline_violations": sum(r["baseline_violations"] for r in per_seed),
         "n_corrections": sum(r["n_corrections"] for r in per_seed),
     }
 
@@ -72,15 +73,15 @@ def _gate_passed(agg: dict) -> bool:
 
 
 def _table(per_seed: list[dict], agg: dict) -> str:
-    header = f"{'seed':>5} {'mae_before':>11} {'mae_after':>10} {'halluc':>7} {'viol':>5} {'corr':>5}  error"
+    header = f"{'seed':>5} {'mae_before':>11} {'mae_after':>10} {'halluc':>7} {'viol':>5} {'base_viol':>9} {'corr':>5}  error"
     rows = [
         f"{r['seed']:>5} {r['mae_before']:>11.4f} {r['mae_after']:>10.4f} {r['hallucinated_citations']:>7} {r['violations']:>5} "
-        f"{r['n_corrections']:>5}  {r['error'] or ''}"
+        f"{r['baseline_violations']:>9} {r['n_corrections']:>5}  {r['error'] or ''}"
         for r in per_seed
     ]
     total = (
         f"{'all':>5} {agg['mae_before']:>11.4f} {agg['mae_after']:>10.4f} {agg['hallucinated_citations']:>7} {agg['violations']:>5} "
-        f"{agg['n_corrections']:>5}  relative MAE change {agg['relative_mae_change']:+.1%}"
+        f"{agg['baseline_violations']:>9} {agg['n_corrections']:>5}  relative MAE change {agg['relative_mae_change']:+.1%}"
     )
     return "\n".join([header, *rows, total])
 

@@ -11,6 +11,7 @@ import copy
 import json
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -89,23 +90,28 @@ def fetch_eurostat_inputs(cache_dir: Path, last_year: int, config: dict) -> Path
     ok = EurostatDataFetcher(last_year, config).fetch_data()
     logger.info(f"Eurostat fetcher finished, success={ok}")
 
-    for namespace, base in expected_input_files(config):
-        pattern = re.compile(rf"^{re.escape(base)}_({TIMESTAMP})\.csv$")
-        blobs = [b for b in bucket.list_blobs(prefix=prefixes[namespace]) if "old_datasets" not in b.name and pattern.match(Path(b.name).name)]
-        if not blobs:
-            continue
-        latest = max(blobs, key=lambda b: pattern.match(Path(b.name).name).group(1))
-        input_dir = cache_dir / namespace / "input"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        for old in input_dir.glob("*.csv"):
-            if pattern.match(old.name):
-                old.unlink()
-        latest.download_to_filename(str(input_dir / Path(latest.name).name))
-
-    present = cached_input_files(cache_dir, config)
-    missing = [f"{ns}/{base}" for ns, base in expected_input_files(config) if (ns, base) not in present]
-    if missing:
-        raise MissingInputFilesError(missing)
+    with tempfile.TemporaryDirectory() as staging:  # the cache changes only when every expected file was produced by this run
+        downloaded = {}
+        for namespace, base in expected_input_files(config):
+            pattern = re.compile(rf"^{re.escape(base)}_({TIMESTAMP})\.csv$")
+            blobs = [b for b in bucket.list_blobs(prefix=prefixes[namespace]) if "old_datasets" not in b.name and pattern.match(Path(b.name).name)]
+            if blobs:
+                latest = max(blobs, key=lambda b: pattern.match(Path(b.name).name).group(1))
+                downloaded[(namespace, base)] = Path(staging) / f"{namespace}__{Path(latest.name).name}"
+                latest.download_to_filename(str(downloaded[(namespace, base)]))
+        missing = [f"{ns}/{base}" for ns, base in expected_input_files(config) if (ns, base) not in downloaded]
+        if missing:
+            raise MissingInputFilesError(missing)
+        if not ok:
+            raise RuntimeError("Eurostat fetcher reported failure (see its log); the cache was left unchanged")
+        for (namespace, base), staged in downloaded.items():
+            pattern = re.compile(rf"^{re.escape(base)}_({TIMESTAMP})\.csv$")
+            input_dir = cache_dir / namespace / "input"
+            input_dir.mkdir(parents=True, exist_ok=True)
+            for old in input_dir.glob("*.csv"):
+                if pattern.match(old.name):
+                    old.unlink()
+            shutil.move(str(staged), str(input_dir / staged.name.split("__", 1)[1]))
     fetched_at = datetime.now(timezone.utc).date().isoformat()
     (cache_dir / MANIFEST).write_text(json.dumps({"last_year": last_year, "fetched_at": fetched_at}, indent=2))
     return cache_dir

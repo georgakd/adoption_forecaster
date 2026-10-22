@@ -26,7 +26,9 @@ def test_stub_mode_gate_passes_with_oracle_script(tmp_path, capsys):
     assert agg["hallucinated_citations"] == 0 and agg["violations"] == 0 and agg["n_corrections"] > 0
     assert data["config"]["mode"] == "stub" and data["config"]["seeds"] == [0] and data["config"]["n_countries"] == 5
     assert data["per_seed"][0]["seed"] == 0 and data["per_seed"][0]["error"] is None
-    assert "mae_before" in capsys.readouterr().out
+    assert data["per_seed"][0]["baseline_violations"] == 0 and agg["baseline_violations"] == 0
+    out = capsys.readouterr().out
+    assert "mae_before" in out and "base_viol" in out
 
 
 def test_stub_mode_gate_fails_when_script_hallucinates(tmp_path, monkeypatch):

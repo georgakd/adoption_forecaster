@@ -62,12 +62,13 @@ Each run writes `benchmark_results/<UTC timestamp>.json` with `config` (mode, mo
 
 - `mae_before` / `mae_after`: mean absolute error against the truth over forecast years, computed per country-segment and then averaged over country-segments. The headline metric. The aggregate is the mean over seeds; `relative_mae_change = (after - before) / before` (negative is better).
 - `hallucinated_citations`: accepted corrections whose citation does not verify against the source store (quote absent from the document, or value mismatch). Summed over seeds.
-- `violations`: hard-constraint violations in the corrected table. Summed over seeds.
+- `violations`: hard-constraint violations the corrections introduced or worsened relative to the baseline (the same rule `propose_correction` enforces). Summed over seeds.
+- `baseline_violations`: violations already present in the baseline forecast, reported separately and not counted against the agent (console column `base_viol`). Summed over seeds.
 - `n_corrections`: accepted corrections. `error`: the agent's failure message for that seed, if any.
 
 ## Hard gate versus reported target
 
-- **Stub model (CI):** hard gate. Aggregate `mae_after < mae_before`, zero hallucinated citations and zero violations; the CLI exits non-zero otherwise. The stub oracle proposes the cited value of a document that agrees with the truth, so a failure means the plumbing or the gate is broken.
+- **Stub model (CI):** hard gate. Aggregate `mae_after < mae_before`, zero hallucinated citations and zero introduced or worsened violations; the CLI exits non-zero otherwise. The stub oracle proposes the cited value of a document that agrees with the truth, so a failure means the plumbing or the gate is broken.
 - **Live model:** reported target. The same numbers are reported, but a miss does not fail the run: it measures the model, not the code.
 
 ## Using it in the real pipeline (milestone 2)
@@ -121,13 +122,31 @@ docker compose -f docker-compose.emulators.yml down -v
 
 **Stub results on the 2026-10-22 cache** (cut 2022, predict 2024, seeds 0-1):
 
-| Module | mae_before | mae_after (oracle) | Violations | Gate |
-|---|---|---|---|---|
-| education | 0.0107 | 0.0085 (-20.6%) | 0 | passed |
-| age_gender | 0.0178 | 0.0153 (-13.8%) | 2 per seed | failed |
+| Module | mae_before | mae_after (oracle) | violations (introduced) | baseline_violations | Gate |
+|---|---|---|---|---|---|
+| education | 0.0107 | 0.0085 (-20.6%) | 0 | 0 | passed |
+| age_gender | 0.0178 | 0.0153 (-13.8%) | 0 | 2 per seed | passed |
 
-The age_gender violations come from the real pipeline's own baseline, not from the agent. Its 2023 forecast for Ireland, ages 65-74 (both genders), jumps more than `max_yoy_change` (0.10) above the last observed year, by +0.147 and +0.178. `evaluate` counts violations in the corrected table, so they show up even when the agent changes nothing. On real data, the zero-violation part of the stub gate is therefore unreachable for age_gender.
+The age_gender baseline violations come from the real pipeline itself: its 2023 forecast for Ireland, ages 65-74 (both genders), is +0.147 and +0.178 above the last observed year, more than `max_yoy_change` (0.10). `violations` counts only what the agent introduces or worsens, so these show up in `baseline_violations` and do not fail the gate.
+
+The published Eurostat age_gender data breaks the 0.10 year-over-year cap too. Using the published truth as the 2023-2024 forecast gives 15 `yoy_cap` violations on this cache (for example, Irish men aged 65-74 went from 62.73% in 2022 to 92.16% in 2023). The cap is therefore stricter than reality and can block corrections toward the truth.
 
 ## Live results
 
-_(to be filled after the first live run)_
+### Run 1 — education, synthetic benchmark (2026-10-22)
+
+Command: `benchmark_cli --module education --seeds 0-2 --n-countries 5 --live --model nvidia/nemotron-3-ultra-550b-a55b`
+
+| seed | MAE before | MAE after | hallucinated citations | violations | corrections |
+|---|---|---|---|---|---|
+| 0 | 0.0222 | 0.0141 | 0 | 0 | 1 |
+| 1 | 0.0042 | 0.0042 | 0 | 0 | 0 |
+| 2 | 0.0090 | 0.0084 | 0 | 0 | 1 |
+| all | 0.0118 | 0.0089 (-24.6%) | 0 | 0 | 2 |
+
+45 LLM calls, about 1003 s. Gate passed (reported target met).
+
+How to read this: it is a very small sample (3 seeds x 5 countries, 2 corrections), so it shows the loop works end
+to end against a real model and that the gate held, not that the agent reliably improves forecasts. Seed 1 made no
+correction. The first attempt with `nvidia/nemotron-3-super-120b-a12b` returned HTTP 404 (model not available to
+the API key used), so that model was not evaluated. The endpoint also returned intermittent HTTP 500s that succeeded on retry.

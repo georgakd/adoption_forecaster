@@ -89,11 +89,12 @@ def test_backtest_runs_through_evaluate_with_stub_agent(bench):
     llm = ScriptedClient([LLMResponse(text='{"suspects": []}')])
     result = run_correction(bench.baseline, bench.module, store, llm, config)
     report = evaluate(bench, result.corrected, result.corrections, store, config)
-    # the real pipeline's own forecast can already break a hard constraint (e.g. yoy_cap after a jump in the last observed year);
-    # proposing nothing must add no violation of its own
+    # the real pipeline's own forecast can already break a hard constraint (e.g. yoy_cap after a jump in the last observed year):
+    # that is reported as baseline_violations; proposing nothing introduces no violation
     inherent = check_constraints(bench.baseline, bench.baseline, bench.module, config["correction"]["max_yoy_change"])
     assert result.error is None and report.n_corrections == 0
-    assert report.mae_after == report.mae_before and report.hallucinated_citations == 0 and report.violations == len(inherent)
+    assert report.mae_after == report.mae_before and report.hallucinated_citations == 0
+    assert report.violations == 0 and report.baseline_violations == len(inherent)
 
 
 def test_missing_expected_file_raises_with_its_name(cache, config, tmp_path, monkeypatch):
@@ -101,7 +102,10 @@ def test_missing_expected_file_raises_with_its_name(cache, config, tmp_path, mon
     shutil.copytree(cache, copy_dir)
     (namespace, base), path = sorted(cached_input_files(copy_dir, config).items())[0]
     (copy_dir / namespace / "input" / path.name).unlink()
-    monkeypatch.setattr(requests, "get", _no_network)  # the real fetcher cannot reach Eurostat, so it cannot produce the file
+    before = sorted((str(p.relative_to(copy_dir)), p.read_bytes()) for p in copy_dir.rglob("*") if p.is_file())
+    monkeypatch.setattr(requests, "get", _no_network)  # the real fetcher cannot reach Eurostat, so it produces nothing this run
     with pytest.raises(MissingInputFilesError) as exc:
         fetch_eurostat_inputs(copy_dir, PRED_YEAR, config)
-    assert base in str(exc.value) and exc.value.missing == [f"{namespace}/{base}"]
+    # every expected file is named, including the ones still cached from an earlier fetch: stale copies do not count as produced
+    assert base in str(exc.value) and exc.value.missing == [f"{ns}/{b}" for ns, b in expected_input_files(config)]
+    assert sorted((str(p.relative_to(copy_dir)), p.read_bytes()) for p in copy_dir.rglob("*") if p.is_file()) == before
