@@ -84,6 +84,7 @@ The **AI adjustments** subsystem corrects exported **prediction CSVs** using Ope
 | Problem, solution, value, features, limitations (technical overview) | [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) |
 | How to run the CLI, layout, components | [quotas_forecasting/AI_adjustments/README.md](quotas_forecasting/AI_adjustments/README.md) |
 | Researcher feedback + embeddings (RAG) | [docs/ARCHITECTURE_RAG.md](docs/ARCHITECTURE_RAG.md) |
+| Autonomous correction agent (cited evidence, deterministic gate, synthetic benchmark runner) | [docs/CORRECTION_AGENT.md](docs/CORRECTION_AGENT.md) |
 
 **Relationship to the main pipeline:** `quotas_forecasting/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from the repository root with `python -m quotas_forecasting.AI_adjustments.main ...` (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.
 
