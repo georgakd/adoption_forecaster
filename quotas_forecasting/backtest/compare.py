@@ -20,7 +20,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from threadpoolctl import threadpool_limits
 
 from quotas_forecasting.backtest.eurostat_backtest import DEFAULT_CACHE_DIR, _copy_inputs, build_real_backtest
 from quotas_forecasting.config.config_loader import load_config
@@ -34,11 +33,14 @@ from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_
 METHODS = ("ensemble", "gam", "entropy_proxy", "kernel_proxy")
 MODULES = ("education", "age_gender")
 REAL_ORIGINS = (2019, 2020, 2021, 2022)
-TUNING_ORIGIN = 2018  # earlier than every reported real origin; used (Education only) with the dev seeds to choose GAM options
+# Real origin used (Education only) with the dev seeds to choose GAM options. NOT fully out of sample: its scored years (2019-2020)
+# overlap the truth of the earliest reported origin (2019 is scored on 2020-2021), and nothing earlier can run for Age_Gender;
+# gam_anchor_robustness() checks that the decision does not depend on the choice made here.
+TUNING_ORIGIN = 2018
 # Decision rule, fixed before any result was looked at: a method becomes an option for a module only if its MAE is at least
 # WIN_MARGIN (relative) below the ensemble's on BOTH the synthetic held-out seeds and the mean over the real origins.
 WIN_MARGIN = 0.05
-GAM_ANCHOR = True  # chosen on the tuning data only (dev seeds + TUNING_ORIGIN, see tune_gam()): anchoring won on all three
+GAM_ANCHOR = True  # chosen on dev seeds + TUNING_ORIGIN (see tune_gam(); anchoring won on all three); see the caveat above
 BLEND_WEIGHTS = {
     "education": [(0.7, 0.3), (1.0, 0.0), (0.0, 1.0), (0.5, 0.5)],  # (theta, random walk); first entry is the config value
     "age_gender": [(1 / 3, 1 / 3, 1 / 3), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.5, 0.5, 0.0)],  # (theta, rw, logistic)
@@ -190,6 +192,18 @@ def tune_gam(tables: list[Benchmark]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def gam_anchor_robustness(tables: list[Benchmark], origins: list[int]) -> pd.DataFrame:
+    """GAM rolling-origin MAE per (module, anchor) for both anchor choices (columns as compare_methods, ``anchor`` for ``method``)."""
+    frames = []
+    for anchor in (False, True):
+        result = compare_methods(tables, ["gam"], origins, gam_anchor=anchor).drop(columns=["method", "fallback_share"])
+        result.insert(1, "anchor", anchor)
+        frames.append(result)
+    out = pd.concat(frames, ignore_index=True)
+    out["_order"] = out["module"].map(MODULES.index)
+    return out.sort_values(["_order", "anchor"], kind="stable").drop(columns="_order").reset_index(drop=True)
+
+
 def diagnostics(tables: list[Benchmark]) -> pd.DataFrame:
     """Data facts behind the review's verdicts, computed on the real tables."""
     rows = []
@@ -242,18 +256,43 @@ def main(argv: list[str] | None = None) -> str:
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--out", type=Path, default=None, help="also write the markdown report here")
     parser.add_argument("--skip-weights", action="store_true", help="skip the (slow) blend-weight re-runs")
+    parser.add_argument("--anchor-robustness", action="store_true", help="only score the GAM with both anchor choices (held-out + real)")
     args = parser.parse_args(argv)
     logging.disable(logging.CRITICAL)
     warnings.filterwarnings("ignore")
+    from threadpoolctl import threadpool_limits  # experiments group (also a scikit-learn dependency)
+
     start = time.time()
     with threadpool_limits(1):  # many tiny BLAS calls: one thread is several times faster than an oversubscribed pool
-        report = _report(args)
+        report = _anchor_report(args) if args.anchor_robustness else _report(args)
     report += f"\n\n(generated in {time.time() - start:.0f}s)\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(report)
     print(report)
     return report
+
+
+def _anchor_report(args) -> str:
+    """Does the decision depend on GAM_ANCHOR? GAM with both anchors against the ensemble, on held-out seeds and real origins."""
+    heldout = synthetic_tables(HELDOUT_SEEDS)
+    real, skipped = real_tables(REAL_ORIGINS, cache_dir=args.cache_dir)
+    origins_run = sorted({t.last_year for t in real})
+    sections, decisions = [], []
+    for label, tables, origins in (("Synthetic, held-out seeds 100-109", heldout, [2024]), (f"Real, origins {origins_run}", real, origins_run)):
+        ensemble = compare_methods(tables, ["ensemble"], origins).drop(columns=["fallback_share"])
+        gam = gam_anchor_robustness(tables, origins)
+        sections.append(f"## {label}: ensemble\n\n" + _markdown(ensemble))
+        sections.append(f"## {label}: GAM by anchor\n\n" + _markdown(gam))
+        decisions.append((ensemble, gam))
+    rows = []
+    for anchor in (False, True):
+        frames = [pd.concat([e[["module", "method", "mae"]], g[g["anchor"] == anchor].assign(method="gam")[["module", "method", "mae"]]])
+                  for e, g in decisions]
+        rows.append(decide(*frames).assign(anchor=anchor))
+    sections.append(f"## Decision by anchor (WIN_MARGIN = {WIN_MARGIN})\n\n" + _markdown(pd.concat(rows, ignore_index=True)))
+    sections.append("## Real origins that could not run\n\n" + "\n".join(f"- {s}" for s in skipped or ["(none)"]))
+    return "\n\n".join(sections)
 
 
 def _report(args) -> str:

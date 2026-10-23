@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+pytest.importorskip("pygam")
+
 from quotas_forecasting.forecasting.experimental.gam import gam_forecast
 
 YEARS = np.arange(2004, 2023)

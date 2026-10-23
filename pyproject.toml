@@ -17,7 +17,6 @@ scipy = "^1.15.3"
 statsmodels = "^0.14.0"
 sktime = "^0.37.1"
 pyjstat = "^2.4.0"
-pygam = "^0.12.0"  # experimental GAM forecaster (Task 14); requires scipy < 1.17
 
 # GCP integration
 google-cloud-storage = "^3.2.0"
@@ -39,6 +38,15 @@ pydantic = "^2.0.0"
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.2.0"  # Only needed during development
 pytest = "^8.0.0"
+
+# Experimental forecasters and their comparison (docs/MODEL_REVIEW.md); never installed by `poetry install --only=main` (Docker).
+# Install with: poetry install --with experiments
+[tool.poetry.group.experiments]
+optional = true
+
+[tool.poetry.group.experiments.dependencies]
+pygam = "^0.12.0"  # GAM forecaster; requires scipy < 1.17
+threadpoolctl = "^3.1.0"  # used by quotas_forecasting.backtest.compare.main (also a scikit-learn dependency)
 
 [tool.pytest.ini_options]
 markers = [

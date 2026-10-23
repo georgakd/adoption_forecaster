@@ -5,6 +5,8 @@ the smoothing penalty chosen by GCV over ``LAMBDAS``. Beyond the last observed y
 the logit scale the forecast follows the fitted end slope, i.e. a logistic-shaped continuation that can never leave (0, 1).
 That end slope is exactly where spline forecasts tend to fail (it is estimated from the last few points only); the review
 measures it rather than assuming it works.
+
+pygam is an optional dependency (the "experiments" Poetry group) and is imported only when ``gam_forecast`` runs.
 """
 
 import contextlib
@@ -12,7 +14,6 @@ import io
 
 import numpy as np
 import pandas as pd
-from pygam import LinearGAM, s
 from scipy.special import expit, logit
 
 EPS = 1e-3  # 0% and 100% shares are mapped to logit(0.001) and logit(0.999)
@@ -27,6 +28,10 @@ def gam_forecast(series: pd.Series, horizon: int, monotone: bool = True, anchor:
     ``monotone`` constrains the spline to be non-decreasing (and the returned path is non-decreasing). ``anchor`` shifts the
     forecast on the logit scale so the fitted curve passes through the last observation. Output is clipped to [0, 1].
     """
+    try:
+        from pygam import LinearGAM, s
+    except ImportError as exc:
+        raise ImportError("gam_forecast needs pygam: install the 'experiments' group: poetry install --with experiments") from exc
     observed = series.dropna().astype(float)
     if len(observed) < MIN_POINTS:
         return np.full(horizon, float(np.clip(observed.iloc[-1], 0, 1)))

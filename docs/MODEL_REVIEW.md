@@ -17,6 +17,7 @@ accepted value, so the goldens are unchanged.
 
 ```
 python -m quotas_forecasting.backtest.compare --out benchmark_results/model_review.md   # about 26 min, offline, single-threaded BLAS
+python -m quotas_forecasting.backtest.compare --anchor-robustness                      # GAM with both anchor choices only
 python -m pytest tests/experimental -v                                                  # suspect evidence + method tests (about 25 s)
 ```
 
@@ -38,7 +39,10 @@ copied from that command's output. The command also writes per-origin columns, w
     `adjust_100prc_predictions_cases`. That rule needs three valid observations per series between `start_year` (2017) and the
     cut, and some real series have gaps there. Test `test_d_ceiling_rule_needs_three_observations_per_series` pins this; see
     suspect (j).
-  - Origin 2018 (Education only) was kept back as a tuning origin and is not reported as a result.
+  - Origin 2018 (Education only) was used for tuning and is not reported as a result. **It is not fully out of sample**: it is
+    scored on 2019-2020, and the earliest reported origin (2019) is scored on 2020-2021, so the 2020 truth cells were used both to
+    choose `GAM_ANCHOR` and to report results. Nothing earlier can serve instead (Age_Gender cannot run before 2021, see (j)).
+    The anchor-robustness check under Results scores both anchor choices to show whether the decision depends on it.
 - **Metric**: `correction.evaluation._mae`. This takes the MAE over the forecast cells of each (country, segment), then averages
   over (country, segment). Cells with no published truth are dropped.
 
@@ -217,9 +221,11 @@ pipeline's baseline table holds and forecast the same cells. For Education they 
   - *Extrapolation:* pygam continues the spline linearly past the last knot. On the logit scale that is a logistic-shaped
     continuation that cannot leave (0, 1). Its slope, however, is estimated from the last few points, which is where spline
     forecasts fail.
-  - *Tuning (dev seeds and real origin 2018 only):* anchoring shifts the curve on the logit scale so that it passes through the last
-    observation. It lowered MAE on all three tuning sets (dev Education 0.0153 to 0.0152, dev Age_Gender 0.0194 to 0.0187, real
-    Education 2018 0.0135 to 0.0078), so `GAM_ANCHOR = True` was fixed before the reported runs. No other option was tuned.
+  - *Tuning (dev seeds and real origin 2018; the 2018 origin's scored years overlap the 2019 origin's truth, see Benchmarks):*
+    anchoring shifts the curve on the logit scale so that it passes through the last observation. It lowered MAE on all three
+    tuning sets (dev Education 0.0153 to 0.0152, dev Age_Gender 0.0194 to 0.0187, real Education 2018 0.0135 to 0.0078), so
+    `GAM_ANCHOR = True` was fixed before the reported runs. No other option was tuned. Because of the overlap, both anchor
+    choices are scored on the reporting data in the anchor-robustness check below.
 - **Entropy and kernel balancing (`entropy_balance_weights`, `kernel_balance_weights`, `proxy_forecast`)**
   - *Domain note:* these are survey-weighting and covariate-balancing tools. They reweight units so that the weighted units match
     target moments. They are not forecasters. Here they are used only as donor weighting for proxy forecasts, in the spirit of
@@ -288,6 +294,21 @@ Decision (relative MAE reduction against the ensemble; positive is better):
 | age_gender | entropy_proxy | +8.1% | -2.7% | no |
 | age_gender | kernel_proxy | +8.7% | -3.1% | no |
 
+**GAM anchor robustness.** The tuning origin overlaps the reported truth (see Benchmarks), so the GAM was scored with both anchor
+choices on the reporting data (`python -m quotas_forecasting.backtest.compare --anchor-robustness`, 265 s):
+
+| module | benchmark | ensemble MAE | GAM, anchor=False | GAM, anchor=True (configured) | gain, anchor=False | gain, anchor=True | wins (either) |
+|---|---|---|---|---|---|---|---|
+| education | synthetic held-out | 0.0195 | 0.0184 | 0.0183 | +5.8% | +6.0% | |
+| education | real (2019-2022) | 0.0100 | 0.0154 | 0.0110 | -53.2% | -9.3% | no |
+| age_gender | synthetic held-out | 0.0216 | 0.0226 | 0.0218 | -4.6% | -0.7% | |
+| age_gender | real (2021-2022) | 0.0193 | 0.0197 | 0.0216 | -2.0% | -11.9% | no |
+
+Real Education GAM by origin, anchor=False: 0.0132 / 0.0144 / 0.0158 / 0.0181 for 2019-2022 (anchor=True: 0.0079 / 0.0091 / 0.0113 /
+0.0156). **The decision does not depend on the anchor choice:** with either value the GAM loses to the ensemble on real data in both
+modules and fails the rule. The configured anchor is not uniformly the better one: on real Age_Gender the unanchored GAM is closer
+to the ensemble (-2.0% against -11.9%), but it still loses.
+
 **Reading the results honestly.**
 
 - **No method wins.** Every alternative is worse than the ensemble on real data. The methods that win on synthetic data (balancing
@@ -310,5 +331,8 @@ Decision (relative MAE reduction against the ensemble; positive is better):
 - The blend-weight grid in (b) is small and is reported on the evaluation data; it explains the current weights rather than
   optimizing them.
 - The 16-74 Education frame is not scored (h).
-- Installing `pygam` 0.12 constrains `scipy < 1.17`; locally it moved scipy from 1.17.1 to 1.16.3. The golden tests pass unchanged
-  on 1.16.3.
+- Dependencies: `pygam` (and `threadpoolctl`, used by `compare.main`) are in the optional Poetry group `experiments`
+  (`poetry install --with experiments`). The Docker image is built from `pyproject.toml` + `poetry.lock` with
+  `poetry install --only=main`, so it never installs them; the lock file is regenerated by the maintainer. `gam_forecast` imports
+  pygam lazily and raises an ImportError naming the group when it is missing; the tests that need it are skipped without it.
+  pygam 0.12 constrains `scipy < 1.17`; locally it moved scipy from 1.17.1 to 1.16.3. The golden tests pass unchanged on 1.16.3.
