@@ -58,7 +58,6 @@ adoption_forecaster/
 ├── requirements.txt             # Python dependencies
 ├── pyproject.toml               # Project metadata and dependencies (for Poetry)
 ├── poetry.lock                  # Poetry lock file
-├── CODEOWNERS                   # Code ownership definitions
 └── README.md                    # Project documentation (this file)
 ```
 
