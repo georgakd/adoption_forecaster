@@ -187,6 +187,23 @@ Run the script with the arguments you use for main. For example:
 - Configuration is loaded from YAML files via `config_loader.py`.
 - Key parameters include bucket names, project IDs, and validation rules (such as required year difference).
 
+## Testing with local emulators
+
+You can run the production path (GCS reads and writes, Pub/Sub messages) without a GCP project by using local emulators. Docker must be running.
+
+```sh
+docker compose -f docker-compose.emulators.yml up -d
+export STORAGE_EMULATOR_HOST=http://localhost:4553   # fake GCS (fsouza/fake-gcs-server)
+export PUBSUB_EMULATOR_HOST=localhost:8685           # Pub/Sub emulator
+pytest -m emulators -v
+docker compose -f docker-compose.emulators.yml down -v
+```
+
+- When `STORAGE_EMULATOR_HOST` is set, `services/gcp_clients.py` uses anonymous credentials instead of reading Secret Manager, so no key or `gcloud` login is needed.
+- Without these variables the emulator tests are skipped, so a plain `pytest tests` stays offline.
+- Real Eurostat data for the backtest is fetched through the GCS emulator once and cached in `.cache/eurostat/`. Delete that folder and run `QF_REALDATA=1 pytest -m realdata` (emulators up) to refresh it; with the cache present those tests run offline.
+- Not covered: Secret Manager, IAM and Cloud Run are not emulated, and the fake GCS server does not enforce permissions. The deploy path and bucket roles can only be tested in a real project (see Cloud resources below).
+
 ## Cloud resources
 
 The code, Dockerfile and workflows expect the resources below. They are not shipped with this repo: create them in your own GCP project, then replace `YOUR_GCP_PROJECT_ID` (Dockerfile, `config.yaml`, workflows) with your project ID. If you pick different names, change them in the places listed.
