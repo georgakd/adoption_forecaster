@@ -120,30 +120,6 @@ python main.py --module both --mode local --pred-year 2026 --last-year 2024
 - `--pred-year`: Target year for predictions.
 - `--last-year`: Last year of available data.
 
-## Pre-commit Hooks
-
-This project uses pre-commit hooks to ensure code quality and consistency. Hooks automatically format code, check for linting issues, and prevent committing debug statements.
-
-### Setup (One-time per developer)
-
-After cloning the repository and installing dependencies:
-
-### Install dependencies (includes pre-commit)
-
-```sh
-poetry install
-```
-
-### Set up git hooks (downloads Ruff, etc. automatically)
-
-```sh
-poetry run pre-commit install
-```
-
-They run automatically on each commit. In case hooks have changed your file you need to stage & commit your file again.
-
-The hooks are defined in `.pre-commit-config.yaml` (trailing whitespace, end-of-file newline, YAML/TOML validity, merge-conflict markers, large files, debug statements and Ruff; it reads its settings from `pyproject.toml`, line length 149, with the correctness rules `E4,E7,E9,F`). They only check the files in a commit. There is no code formatter configured, only Ruff's correctness lint. Run `poetry run pre-commit run --all-files` to check the whole repo; the whitespace and end-of-file hooks may touch existing files, so commit that on its own.
-
 ### Execution via Docker (Local & Cloud Shell)
 
 #### 1. Make sure Docker is running
