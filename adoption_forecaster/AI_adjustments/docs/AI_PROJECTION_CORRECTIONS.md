@@ -62,7 +62,7 @@ Entry point **`python -m adoption_forecaster.AI_adjustments.main`** (not **`adop
 ### Configuration & secrets
 
 - **`adoption_forecaster/config/config.yaml`**: `defaults.project_id`, **`secrets.openai_api_key`** (Secret Manager secret name).
-- Runtime uses **`get_openai_api_key`** (`gcp_secrets.py`); callers need credentials that can read Secret Manager (e.g. ADC or service account). **Local vs prod notes:** [module README — OpenAI API key](../README.md#openai-api-key-local-and-prod).
+- Runtime uses **`get_openai_api_key`** (`gcp_secrets.py`); callers need credentials that can read Secret Manager (e.g. ADC or service account), unless `OPENAI_API_KEY` is exported, in which case it takes precedence and Secret Manager is not contacted. **Local vs prod notes:** [module README — OpenAI API key](../README.md#openai-api-key-local-and-prod).
 
 ### Researcher feedback file (RAG)
 

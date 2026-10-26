@@ -50,7 +50,7 @@ AI_adjustments/
 
 1. From the **repository root**, install the main project with Poetry (`poetry install`). `openai` and `pydantic` are regular dependencies in `pyproject.toml`; no separate requirements file is needed.
 
-1. **API key:** Loaded at runtime from **GCP Secret Manager** (see below). A `.env` `OPENAI_API_KEY` is **not** read by the current `main.py` path.
+1. **API key:** the exported `OPENAI_API_KEY` environment variable if set, otherwise **GCP Secret Manager** (see below). A `.env` file is **not** loaded by the code: export the variable in your shell.
 
 2. Prepare input data: place prediction CSV files in **`input/`** under the directory you run the CLI from (paths are relative to the current working directory; typically the repository root).
 
@@ -58,12 +58,12 @@ AI_adjustments/
 
 The AI adjustments module needs an OpenAI API key for the correction agent and optional RAG feedback.
 
-- **Prod and local mode**  
-  The key is always loaded from **GCP Secret Manager**. The secret name is set in `config.yaml` under `secrets.openai_api_key` (e.g. `adoption-forecaster-openai-api-key`). The project is taken from `defaults.project_id`.  
-  At runtime, `get_openai_api_key(config)` is called and the key is used by `AIClient` and `FeedbackRAGRetriever`. For this to work in prod (or when running “locally” against GCP), the environment must have credentials that can access Secret Manager (e.g. the forecasting service account or Application Default Credentials).
+- **Prod**  
+  The key is loaded from **GCP Secret Manager**. The secret name is set in `config.yaml` under `secrets.openai_api_key` (e.g. `adoption-forecaster-openai-api-key`). The project is taken from `defaults.project_id`.  
+  At runtime, `get_openai_api_key(project_id, secret_name)` is called and the key is used by `AIClient` and `FeedbackRAGRetriever`. The environment must have credentials that can access Secret Manager (e.g. the forecasting service account or Application Default Credentials).
 
 - **Local development**  
-  In the current implementation, local runs use the same GCP Secret Manager path as prod. Ensure you are authenticated (e.g. `gcloud auth application-default login`) and that your identity can access the secret in the configured project.
+  Export `OPENAI_API_KEY` in your shell (`export OPENAI_API_KEY=...`). When it is set and not blank it takes precedence and Secret Manager is not contacted, so no GCP login is needed. Unset it to use the Secret Manager path (authenticate with Application Default Credentials). Because it takes precedence, make sure it is not set in production.
 
 ## Usage
 
