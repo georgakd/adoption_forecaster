@@ -61,9 +61,6 @@ build-backend = "poetry.core.masonry.api"
 
 
 # Code formatting and linting configuration
-[tool.black]
-line-length = 149
-
 [tool.ruff]
 line-length = 149
 

@@ -1,5 +1,5 @@
 # Install once with: poetry run pre-commit install
-# Black and Ruff read their settings (line length 149) from pyproject.toml.
+# Ruff reads its settings (line length 149, rules E4,E7,E9,F) from pyproject.toml.
 exclude: ^(tests/golden/|benchmark_results/|\.cache/)
 
 repos:
@@ -13,11 +13,6 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: debug-statements
-
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 26.10.1
-    hooks:
-      - id: black
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.2

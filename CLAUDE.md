@@ -14,7 +14,7 @@ Forecasts internet-penetration shares by segment (Education, Age_Gender) from Eu
 - Tests (offline, ~100 s): `pytest`. `pytest tests` leaves out the `AI_adjustments` tests.
 - Emulator tests: start `docker compose -f docker-compose.emulators.yml up -d`, export `STORAGE_EMULATOR_HOST=http://localhost:4553` and `PUBSUB_EMULATOR_HOST=localhost:8685`, run `pytest -m emulators`. Real-data backtest: `QF_REALDATA=1 pytest -m realdata`.
 - Benchmark (stub, no network): `python -m adoption_forecaster.correction.benchmark_cli --module education --seeds 0-4`. Add `--real` for the Eurostat cache and `--live --model <id>` for a real LLM.
-- Lint and format: black and ruff, line length 149 (configured in `pyproject.toml`; Ruff checks `E4,E7,E9,F` only). Hooks live in `.pre-commit-config.yaml` (`poetry run pre-commit install`); they run on staged files only, and about 20 existing files are not yet Black-formatted.
+- Lint: ruff only (no code formatter), line length 149, rules `E4,E7,E9,F` (configured in `pyproject.toml`). Hooks live in `.pre-commit-config.yaml` (`poetry run pre-commit install`) and run on staged files only.
 - Refresh the lock: `poetry lock` (Python must be 3.11; with uv: `VIRTUAL_ENV=$PWD/.venv uvx --python 3.11 poetry lock`).
 
 ## Rules

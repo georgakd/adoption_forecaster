@@ -134,7 +134,7 @@ After cloning the repository and installing dependencies:
 poetry install
 ```
 
-### Set up git hooks (downloads Black, Ruff, etc. automatically)
+### Set up git hooks (downloads Ruff, etc. automatically)
 
 ```sh
 poetry run pre-commit install
@@ -142,7 +142,7 @@ poetry run pre-commit install
 
 They run automatically on each commit. In case hooks have changed your file you need to stage & commit your file again.
 
-The hooks are defined in `.pre-commit-config.yaml` (trailing whitespace, end-of-file newline, YAML/TOML validity, merge-conflict markers, large files, debug statements, Black and Ruff; both read their settings from `pyproject.toml`, line length 149, Ruff with the correctness rules `E4,E7,E9,F`). They only check the files in a commit. About 20 existing files are not yet Black-formatted, so they are reformatted the first time you commit a change to them. Run `poetry run pre-commit run --all-files` to check or reformat everything at once, ideally in its own commit.
+The hooks are defined in `.pre-commit-config.yaml` (trailing whitespace, end-of-file newline, YAML/TOML validity, merge-conflict markers, large files, debug statements and Ruff; it reads its settings from `pyproject.toml`, line length 149, with the correctness rules `E4,E7,E9,F`). They only check the files in a commit. There is no code formatter configured, only Ruff's correctness lint. Run `poetry run pre-commit run --all-files` to check the whole repo; the whitespace and end-of-file hooks may touch existing files, so commit that on its own.
 
 ### Execution via Docker (Local & Cloud Shell)
 
