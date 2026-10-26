@@ -34,13 +34,13 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t quotas-forecasting-image .
+          docker build -t adoption-forecaster-image .
 
       - name: Fetch forecasting SA key from Secret Manager
         run: |
           gcloud secrets versions access latest \
             --project=339766178133 \
-            --secret="quotas-forecasting-sa-key" \
+            --secret="adoption-forecaster-sa-key" \
             > /tmp/forecasting-creds.json
 
       - name: Determine latest available year from CSV data
@@ -50,19 +50,19 @@ jobs:
           gcloud auth activate-service-account --key-file=/tmp/forecasting-creds.json
 
           # List files and get the first one from Education folder
-          FIRST_FILE=$(gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv 2>/dev/null | head -1)
+          FIRST_FILE=$(gsutil ls gs://adoption-forecaster-data/Test_Eurostat/Education/input/*.csv 2>/dev/null | head -1)
           if [ -z "$FIRST_FILE" ]; then
             # If Education folder is empty, try Age_Gender
-            FIRST_FILE=$(gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv 2>/dev/null | head -1)
+            FIRST_FILE=$(gsutil ls gs://adoption-forecaster-data/Test_Eurostat/Age_Gender/input/*.csv 2>/dev/null | head -1)
           fi
 
           if [ -z "$FIRST_FILE" ]; then
             echo "Error: No input CSV files found in GCS to determine available years"
             echo "Attempted paths:"
-            echo "  - gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv"
-            echo "  - gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv"
+            echo "  - gs://adoption-forecaster-data/Test_Eurostat/Education/input/*.csv"
+            echo "  - gs://adoption-forecaster-data/Test_Eurostat/Age_Gender/input/*.csv"
             echo "Checking if bucket is accessible..."
-            gsutil ls gs://ml-quotas-forecasting/Test_Eurostat/ 2>&1 || true
+            gsutil ls gs://adoption-forecaster-data/Test_Eurostat/ 2>&1 || true
             exit 1
           fi
 
@@ -105,8 +105,8 @@ jobs:
         run: |
           gcloud auth activate-service-account --key-file=/tmp/forecasting-creds.json
           mkdir -p adoption_forecaster/Education/input adoption_forecaster/Age_Gender/input
-          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv adoption_forecaster/Education/input/
-          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv adoption_forecaster/Age_Gender/input/
+          gsutil -m cp gs://adoption-forecaster-data/Test_Eurostat/Education/input/*.csv adoption_forecaster/Education/input/
+          gsutil -m cp gs://adoption-forecaster-data/Test_Eurostat/Age_Gender/input/*.csv adoption_forecaster/Age_Gender/input/
 
       - name: Run predictions on main
         run: |
@@ -119,7 +119,7 @@ jobs:
             -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/forecasting-creds.json" \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            quotas-forecasting-image:latest \
+            adoption-forecaster-image:latest \
             --module both --mode local --pred-year "$PRED_YEAR" --last-year "$LAST_YEAR"
 
           # Copy files to validation-outputs
@@ -144,7 +144,7 @@ jobs:
             -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/forecasting-creds.json" \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            quotas-forecasting-image:latest \
+            adoption-forecaster-image:latest \
             --module both --mode local --pred-year "$PRED_YEAR" --last-year "$LAST_YEAR"
 
           # Copy files to validation-outputs
@@ -166,7 +166,7 @@ jobs:
             -e PYTHONPATH=/workspace:/app \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            quotas-forecasting-image:latest \
+            adoption-forecaster-image:latest \
             adoption_forecaster/testing/validation_ga.py \
               --base-dir validation-outputs/main \
               --compare-dir validation-outputs/pr \

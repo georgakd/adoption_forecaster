@@ -59,7 +59,7 @@ AI_adjustments/
 The AI adjustments module needs an OpenAI API key for the correction agent and optional RAG feedback.
 
 - **Prod and local mode**  
-  The key is always loaded from **GCP Secret Manager**. The secret name is set in `config.yaml` under `secrets.openai_api_key` (e.g. `quotas-forecasting-openai-api-key`). The project is taken from `defaults.project_id`.  
+  The key is always loaded from **GCP Secret Manager**. The secret name is set in `config.yaml` under `secrets.openai_api_key` (e.g. `adoption-forecaster-openai-api-key`). The project is taken from `defaults.project_id`.  
   At runtime, `get_openai_api_key(config)` is called and the key is used by `AIClient` and `FeedbackRAGRetriever`. For this to work in prod (or when running “locally” against GCP), the environment must have credentials that can access Secret Manager (e.g. the forecasting service account or Application Default Credentials).
 
 - **Local development**  

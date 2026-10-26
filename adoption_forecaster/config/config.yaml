@@ -6,7 +6,7 @@ defaults:
   mode: "prod"
   auto_fetch: false
   local_data_dir: null  # when set, local mode reads/writes <dir>/<Namespace>/{input,output} instead of the package dir
-  bucket_name: "ml-quotas-forecasting"
+  bucket_name: "adoption-forecaster-data"
   project_id: "339766178133"
   bucket_name_external: "universe-bucket-staging" #Andromeda's bucket "universe-bucket-production"---> production
   dir_external: "population_modelling_projections" #Andromeda's folder in gcs bucket
@@ -22,11 +22,11 @@ gcs:
 pubsub:
   enable_notifications: false #true if  we want to send notifications
   topic_name: "population-modelling-files-notifications" #topic name created by Andromeda
-  service_account: "quotas-forecasting@ml-cloud-374512.iam.gserviceaccount.com" #ML team srvc account
+  service_account: "adoption-forecaster@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com" #ML team srvc account
   sub_project_id: "464955218160" # "1050241395899" id for data-pooling-p project (production), if needed it can be changed  to data-pooling-s (for testing) with id:"464955218160"
 
 secrets:
-  openai_api_key: "quotas-forecasting-openai-api-key"
+  openai_api_key: "adoption-forecaster-openai-api-key"
 # Eurostat settings
 eurostat:
   dataset_codes:

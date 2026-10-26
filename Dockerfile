@@ -15,8 +15,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_BUILDKIT=1               
 
 # Project-level identifiers
-ENV GOOGLE_CLOUD_PROJECT=ml-cloud-374512
-ENV GCS_BUCKET_NAME=ml-quotas-forecasting
+ENV GOOGLE_CLOUD_PROJECT=YOUR_GCP_PROJECT_ID
+ENV GCS_BUCKET_NAME=adoption-forecaster-data
 # Add /app to Python path so adoption_forecaster package can be found
 ENV PYTHONPATH=/app
 

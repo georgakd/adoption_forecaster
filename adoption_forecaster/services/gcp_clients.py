@@ -30,7 +30,7 @@ def _credentials_from_secret_manager(project_id):
     """Get service account credentials from Secret Manager"""
     try:
         client = secretmanager.SecretManagerServiceClient()
-        secret_name = f"projects/{project_id}/secrets/quotas-forecasting-sa-key/versions/latest"
+        secret_name = f"projects/{project_id}/secrets/adoption-forecaster-sa-key/versions/latest"
         logger.error("SECRET_NAME_USED=%s", secret_name)
 
         logger.info(f"Accessing secret: {secret_name}")

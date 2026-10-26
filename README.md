@@ -109,7 +109,7 @@ You can run the main forecasting pipeline either locally or in production/cloud 
 - Execute `poetry install` or `- poetry update`
 - Switch inside the venv with: `poetry shell`
 - Inside the shell, type: `export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"`
-- Copy the correct input files from `ml-quotas-forecasting/Eurostat/` bucket to the same level as the `main.py` file.
+- Copy the correct input files from `adoption-forecaster-data/Eurostat/` bucket to the same level as the `main.py` file.
 - Run:
 
 ```sh
@@ -187,6 +187,41 @@ Run the script with the arguments you use for main. For example:
 - Configuration is loaded from YAML files via `config_loader.py`.
 - Key parameters include bucket names, project IDs, and validation rules (such as required year difference).
 
+## Cloud resources
+
+The code, Dockerfile and workflows expect the resources below. They are not shipped with this repo: create them in your own GCP project, then replace `YOUR_GCP_PROJECT_ID` (Dockerfile, `config.yaml`, workflows) with your project ID. If you pick different names, change them in the places listed.
+
+| Resource | Default name | Used for | Set in |
+|---|---|---|---|
+| GCS bucket (internal) | `adoption-forecaster-data` | Inputs and outputs (`<data_source>/<module>/input,output`) | `config.yaml` `defaults.bucket_name`, Dockerfile `GCS_BUCKET_NAME`, `pr-validation.yml`, `tests/e2e/conftest.py` |
+| Secret (service-account key) | `adoption-forecaster-sa-key` | Runtime credentials for GCS and Pub/Sub | `services/gcp_clients.py`, `docker-run.sh`, workflows |
+| Secret (LLM key) | `adoption-forecaster-openai-api-key` | Key for the AI corrections | `config.yaml` `secrets.openai_api_key` |
+| Service account | `adoption-forecaster@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com` | Identity the pipeline runs as | `config.yaml` `pubsub.service_account` |
+| Container image | `eu.gcr.io/YOUR_GCP_PROJECT_ID/adoption-forecaster-image` | Pushed by the post-merge workflow | `post-merge-run-full-pipeline.yml` |
+| Cloud Run job | `adoption-forecaster-run` (region `europe-west1`) | Runs the pipeline in the container | `post-merge-trigger-cloud-run.yml` |
+
+Create them once (bucket names are global, so `adoption-forecaster-data` may be taken: choose your own and update the files above):
+
+```sh
+gcloud config set project YOUR_GCP_PROJECT_ID
+gcloud storage buckets create gs://adoption-forecaster-data --location=europe-west1
+gcloud iam service-accounts create adoption-forecaster
+gcloud storage buckets add-iam-policy-binding gs://adoption-forecaster-data \
+  --member=serviceAccount:adoption-forecaster@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/storage.objectAdmin
+gcloud iam service-accounts keys create /tmp/key.json \
+  --iam-account=adoption-forecaster@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com
+gcloud secrets create adoption-forecaster-sa-key --data-file=/tmp/key.json && rm /tmp/key.json
+printf '%s' "$LLM_API_KEY" | gcloud secrets create adoption-forecaster-openai-api-key --data-file=-
+```
+
+The Cloud Run job and the image push are created by the workflows once the image exists; the job needs the service account above.
+
+Other values in this repo still point at systems that were not created here and must be replaced or switched off:
+- `config.yaml` `defaults.project_id` and `pubsub.sub_project_id` are numeric project numbers of the previous owner. Set `project_id` to your own project number (it is used to read the secret).
+- `bucket_name_external`, `dir_external` and `pubsub.topic_name` describe another team's bucket and topic. They are only used when `pubsub.enable_notifications` is `true`; leave it `false` unless you provide your own.
+- The workflows run in the runner image `eu.gcr.io/gwi-host-net/ubuntu:act-latest`, which belongs to the previous owner. Replace it with an image you can pull (for example `ubuntu:22.04` with the tools installed).
+
 ## CI Pipelines (GitHub Actions)
 
 Three GitHub Actions workflows for now, two to validate the forecasting pipeline at different stages and one to trigger a Cloud Run Job.
@@ -214,7 +249,7 @@ This is a fast, lightweight check that prevents broken Dockerfiles or Python sta
 - 🔐 Authenticates to GCP using the GitHub secret `SA_GWI_HOST_NET`(*)
 - 🔑 Fetches the forecasting service account key from Secret Manager
 - 🧪 Runs the pipeline using real CLI arguments for both modules
-- 🚀 Pushes the built Docker image to`eu.gcr.io/ml-cloud-374512/quotas-forecasting-image` if all  above tests pass
+- 🚀 Pushes the built Docker image to`eu.gcr.io/YOUR_GCP_PROJECT_ID/adoption-forecaster-image` if all  above tests pass
 
 (*) `SA_GWI_HOST_NET`: A GitHub Actions secret that contains the deployer service account key. Used to authenticate GitHub to GCP and fetch the real forecasting SA key from Secret Manager.
 
@@ -304,4 +339,4 @@ pubsub:
   service_account: "<PUBLISHER_SA_EMAIL>"
 ```
 
-- Notes: Ensure Secret Manager contains the publisher key at `projects/<project_id>/secrets/quotas-forecasting-sa-key`, and `bucket_name_external`/`dir_external` are set for Andromeda.
+- Notes: Ensure Secret Manager contains the publisher key at `projects/<project_id>/secrets/adoption-forecaster-sa-key`, and `bucket_name_external`/`dir_external` are set for Andromeda.

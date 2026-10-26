@@ -19,7 +19,7 @@ def emulator_config():
     config = copy.deepcopy(load_config())
     config["gcs"]["data_source"] = DATA_SOURCE
     config["pubsub"]["enable_notifications"] = True
-    config["defaults"]["bucket_name"] = "ml-quotas-forecasting"
+    config["defaults"]["bucket_name"] = "adoption-forecaster-data"
     config["defaults"]["bucket_name_external"] = "universe-bucket-staging"
     return config
 

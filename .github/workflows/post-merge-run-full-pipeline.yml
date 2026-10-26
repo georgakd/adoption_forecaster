@@ -32,13 +32,13 @@ jobs:
 
       - name: 🐳 Build Docker image
         run: |
-          docker build -t quotas-forecasting-image .
+          docker build -t adoption-forecaster-image .
 
       - name: 🔐 Fetch forecasting SA key from Secret Manager
         run: |
           gcloud secrets versions access latest \
                       --project=339766178133 \
-                      --secret="quotas-forecasting-sa-key" \
+                      --secret="adoption-forecaster-sa-key" \
                       > forecasting-creds.json
 
       - name: 🧪 Run forecasting for both modules
@@ -46,7 +46,7 @@ jobs:
           docker run --rm \
             -v /home/runner/_work/adoption_forecaster/adoption_forecaster/forecasting-creds.json:/tmp/credentials.json \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/credentials.json \
-            quotas-forecasting-image \
+            adoption-forecaster-image \
             --module both --mode prod --pred-year 2026 --last-year 2024
 
       - name: 🔐 Docker login to GCR
@@ -58,5 +58,5 @@ jobs:
 
       - name: 📦 Push image to GCR
         run: |
-          docker tag quotas-forecasting-image eu.gcr.io/ml-cloud-374512/quotas-forecasting-image:latest
-          docker push eu.gcr.io/ml-cloud-374512/quotas-forecasting-image:latest
+          docker tag adoption-forecaster-image eu.gcr.io/YOUR_GCP_PROJECT_ID/adoption-forecaster-image:latest
+          docker push eu.gcr.io/YOUR_GCP_PROJECT_ID/adoption-forecaster-image:latest

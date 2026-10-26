@@ -11,7 +11,7 @@
 # Define paths and secret name
 TMP_KEY_PATH="/tmp/forecasting-creds.json"         # Where the service account key will be stored temporarily
 MOUNT_PATH="/tmp/credentials.json"                 # Path the key will be mounted inside the container
-SECRET_NAME="quotas-forecasting-sa-key"            # Name of the secret in Google Secret Manager
+SECRET_NAME="adoption-forecaster-sa-key"            # Name of the secret in Google Secret Manager
 
 # ----------------------------
 # Step 1: Build the Docker image
