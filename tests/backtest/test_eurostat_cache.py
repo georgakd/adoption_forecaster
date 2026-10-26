@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 import requests
 
-from quotas_forecasting.backtest import eurostat_backtest
-from quotas_forecasting.backtest.eurostat_backtest import (
+from adoption_forecaster.backtest import eurostat_backtest
+from adoption_forecaster.backtest.eurostat_backtest import (
     MANIFEST,
     MissingInputFilesError,
     cached_input_files,
     expected_input_files,
     fetch_eurostat_inputs,
 )
-from quotas_forecasting.config.config_loader import load_config
+from adoption_forecaster.config.config_loader import load_config
 
 
 def _forbidden(*args, **kwargs):

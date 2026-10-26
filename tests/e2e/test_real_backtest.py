@@ -12,8 +12,8 @@ import shutil
 import pytest
 import requests
 
-from quotas_forecasting.backtest import eurostat_backtest
-from quotas_forecasting.backtest.eurostat_backtest import (
+from adoption_forecaster.backtest import eurostat_backtest
+from adoption_forecaster.backtest.eurostat_backtest import (
     DEFAULT_CACHE_DIR,
     MissingInputFilesError,
     build_real_backtest,
@@ -21,13 +21,13 @@ from quotas_forecasting.backtest.eurostat_backtest import (
     expected_input_files,
     fetch_eurostat_inputs,
 )
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.agent import run_correction
-from quotas_forecasting.correction.caps import compute_yoy_caps
-from quotas_forecasting.correction.constraints import check_constraints
-from quotas_forecasting.correction.evaluation import evaluate
-from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient
-from quotas_forecasting.correction.sources import SyntheticSourceStore
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.agent import run_correction
+from adoption_forecaster.correction.caps import compute_yoy_caps
+from adoption_forecaster.correction.constraints import check_constraints
+from adoption_forecaster.correction.evaluation import evaluate
+from adoption_forecaster.correction.llm import LLMResponse, ScriptedClient
+from adoption_forecaster.correction.sources import SyntheticSourceStore
 
 CUT_YEAR = 2022
 PRED_YEAR = 2024

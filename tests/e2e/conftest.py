@@ -9,8 +9,8 @@ from google.api_core import exceptions as gapi_exceptions
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import pubsub_v1, storage
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 from tests.e2e.emulators import DATA_SOURCE
 
 

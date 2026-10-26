@@ -17,9 +17,9 @@ and from a benchmark that scores it, not from a person reading results.
 
 - Core pipeline: Eurostat data -> Theta / random walk / logistic / LASSO
   ensemble -> CSVs to local disk or GCS -> optional Pub/Sub notification
-  (protobuf). Config in `quotas_forecasting/config/config.yaml`. Entry:
-  `quotas_forecasting/main.py`.
-- `quotas_forecasting/AI_adjustments/`: separate CLI, OpenAI GPT-4o
+  (protobuf). Config in `adoption_forecaster/config/config.yaml`. Entry:
+  `adoption_forecaster/main.py`.
+- `adoption_forecaster/AI_adjustments/`: separate CLI, OpenAI GPT-4o
   tool-calling loop, one country (or country x age/gender) at a time, fixed
   rules (e.g. year-over-year change > 1%), `WorkflowEnforcer` to keep the model
   on sequence. Run by hand, not wired into the pipeline. Flat imports
@@ -141,7 +141,7 @@ In:
   config/env.
 
 Out (for now): splitting large files (`forecasting/utils.py`,
-`forecasting/quotas_forecasting.py`, `fetch_data/fetch_data_from_Eurostat.py`),
+`forecasting/adoption_forecaster.py`, `fetch_data/fetch_data_from_Eurostat.py`),
 changing forecasting math.
 
 ## Left to the builder

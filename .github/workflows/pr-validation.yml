@@ -104,9 +104,9 @@ jobs:
       - name: Download inputs from GCS
         run: |
           gcloud auth activate-service-account --key-file=/tmp/forecasting-creds.json
-          mkdir -p quotas_forecasting/Education/input quotas_forecasting/Age_Gender/input
-          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv quotas_forecasting/Education/input/
-          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv quotas_forecasting/Age_Gender/input/
+          mkdir -p adoption_forecaster/Education/input adoption_forecaster/Age_Gender/input
+          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Education/input/*.csv adoption_forecaster/Education/input/
+          gsutil -m cp gs://ml-quotas-forecasting/Test_Eurostat/Age_Gender/input/*.csv adoption_forecaster/Age_Gender/input/
 
       - name: Run predictions on main
         run: |
@@ -125,12 +125,12 @@ jobs:
           # Copy files to validation-outputs
           mkdir -p validation-outputs/main/Education validation-outputs/main/Age_Gender
 
-          if [ -d "quotas_forecasting/Education/output" ]; then
-            cp -v quotas_forecasting/Education/output/*.csv validation-outputs/main/Education/
+          if [ -d "adoption_forecaster/Education/output" ]; then
+            cp -v adoption_forecaster/Education/output/*.csv validation-outputs/main/Education/
           fi
 
-          if [ -d "quotas_forecasting/Age_Gender/output" ]; then
-            cp -v quotas_forecasting/Age_Gender/output/*.csv validation-outputs/main/Age_Gender/
+          if [ -d "adoption_forecaster/Age_Gender/output" ]; then
+            cp -v adoption_forecaster/Age_Gender/output/*.csv validation-outputs/main/Age_Gender/
           fi
 
       - name: Run predictions on PR branch
@@ -150,12 +150,12 @@ jobs:
           # Copy files to validation-outputs
           mkdir -p validation-outputs/pr/Education validation-outputs/pr/Age_Gender
 
-          if [ -d "quotas_forecasting/Education/output" ]; then
-            cp -v quotas_forecasting/Education/output/*.csv validation-outputs/pr/Education/
+          if [ -d "adoption_forecaster/Education/output" ]; then
+            cp -v adoption_forecaster/Education/output/*.csv validation-outputs/pr/Education/
           fi
 
-          if [ -d "quotas_forecasting/Age_Gender/output" ]; then
-            cp -v quotas_forecasting/Age_Gender/output/*.csv validation-outputs/pr/Age_Gender/
+          if [ -d "adoption_forecaster/Age_Gender/output" ]; then
+            cp -v adoption_forecaster/Age_Gender/output/*.csv validation-outputs/pr/Age_Gender/
           fi
 
       - name: Run validation script
@@ -167,7 +167,7 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             quotas-forecasting-image:latest \
-            quotas_forecasting/testing/validation_ga.py \
+            adoption_forecaster/testing/validation_ga.py \
               --base-dir validation-outputs/main \
               --compare-dir validation-outputs/pr \
               --pred-year "$PRED_YEAR" \

@@ -4,7 +4,7 @@ import time
 
 from google.api_core import exceptions as gapi_exceptions
 
-from quotas_forecasting.services.modelling_files_pb2 import FileType, ModellingOutputFile
+from adoption_forecaster.services.modelling_files_pb2 import FileType, ModellingOutputFile
 
 DATA_SOURCE = "Eurostat"
 PULL_DEADLINE_SECONDS = 30
@@ -54,5 +54,5 @@ def assert_uploaded_and_notified(emulator_env):
     expected = {FileType.Value(t) for t in ("AGE_AND_GENDER", "EDUCATION_16_TO_64", "EDUCATION_16_TO_74")}
     assert {m.file_type for m in messages} == expected
     for m in messages:
-        assert m.sender == "quotas_forecasting"
+        assert m.sender == "adoption_forecaster"
         assert m.projection_year == PRED_YEAR

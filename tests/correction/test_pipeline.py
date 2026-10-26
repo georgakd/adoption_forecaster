@@ -4,11 +4,11 @@ import logging
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction import pipeline
-from quotas_forecasting.correction.agent import CorrectionResult
-from quotas_forecasting.correction.llm import ScriptedClient
-from quotas_forecasting.correction.types import Citation, Correction
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction import pipeline
+from adoption_forecaster.correction.agent import CorrectionResult
+from adoption_forecaster.correction.llm import ScriptedClient
+from adoption_forecaster.correction.types import Citation, Correction
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def test_each_accepted_correction_is_logged_at_info(frame, monkeypatch, caplog):
     monkeypatch.setattr(pipeline, "run_correction", run)
     config = copy.deepcopy(load_config())
     config["correction"]["enabled"] = True
-    with caplog.at_level(logging.INFO, logger="quotas_forecasting.correction.pipeline"):
+    with caplog.at_level(logging.INFO, logger="adoption_forecaster.correction.pipeline"):
         pipeline.maybe_correct(frame, "education", 2024, config, store=None, llm=ScriptedClient([]))
     lines = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO and "fr-25" in r.getMessage()]
     assert len(lines) == 1

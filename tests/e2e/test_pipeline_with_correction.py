@@ -13,13 +13,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from quotas_forecasting.correction import pipeline
-from quotas_forecasting.correction.llm import LLMUnavailableError, MissingApiKeyError, ScriptedClient
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.main import run_single_module
-from quotas_forecasting.synthetic.benchmark import build_benchmark
-from quotas_forecasting.synthetic.world import DEFAULT_COUNTRIES
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.correction import pipeline
+from adoption_forecaster.correction.llm import LLMUnavailableError, MissingApiKeyError, ScriptedClient
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.main import run_single_module
+from adoption_forecaster.synthetic.benchmark import build_benchmark
+from adoption_forecaster.synthetic.world import DEFAULT_COUNTRIES
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 from tests.correction.scripting import plan, research_script
 from tests.e2e.test_pipeline_local import AGE_GENDER_OUTPUTS, EDUCATION_OUTPUTS, GOLDEN_DIR
 from tests.e2e.emulators import assert_uploaded_and_notified
@@ -164,8 +164,8 @@ def test_flag_on_with_scripted_llm_changes_only_cited_cells(module, benches, wor
 
 def test_missing_key_with_flag_on_raises_at_startup_and_message_has_no_secret(local_config, monkeypatch):
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
-    monkeypatch.setattr("quotas_forecasting.main.get_predictor", _boom)  # forecasting must not start
-    monkeypatch.setattr("quotas_forecasting.main.Loader", _boom)
+    monkeypatch.setattr("adoption_forecaster.main.get_predictor", _boom)  # forecasting must not start
+    monkeypatch.setattr("adoption_forecaster.main.Loader", _boom)
     config = _enabled(local_config)
     for module in SEGMENTS:
         with pytest.raises(MissingApiKeyError) as excinfo:
@@ -176,7 +176,7 @@ def test_missing_key_with_flag_on_raises_at_startup_and_message_has_no_secret(lo
 
 
 def test_flag_on_without_a_store_fails_fast_with_a_clear_message(local_config, monkeypatch):
-    monkeypatch.setattr("quotas_forecasting.main.get_predictor", _boom)
+    monkeypatch.setattr("adoption_forecaster.main.get_predictor", _boom)
     with pytest.raises(pipeline.NoSourceStoreError, match="no source store is configured; real sources arrive in milestone 2"):
         _run("education", _enabled(local_config), correction_llm=ScriptedClient([]))
 

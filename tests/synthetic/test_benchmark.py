@@ -3,9 +3,9 @@ import dataclasses
 import pytest
 from pandas.testing import assert_frame_equal
 
-from quotas_forecasting.correction.sources import SourceSnippet, SyntheticSourceStore
-from quotas_forecasting.synthetic.benchmark import DEV_SEEDS, HELDOUT_SEEDS, build_benchmark
-from quotas_forecasting.synthetic.sources import DEV_STYLE, HELDOUT_STYLE, format_value, make_docs
+from adoption_forecaster.correction.sources import SourceSnippet, SyntheticSourceStore
+from adoption_forecaster.synthetic.benchmark import DEV_SEEDS, HELDOUT_SEEDS, build_benchmark
+from adoption_forecaster.synthetic.sources import DEV_STYLE, HELDOUT_STYLE, format_value, make_docs
 
 SEED = 0
 WRONG_THRESHOLD = 0.03  # noise=0.01 is clipped to +-0.02; wrong offsets are >= 0.06

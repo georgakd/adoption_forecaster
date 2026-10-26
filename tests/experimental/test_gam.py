@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("pygam")
 
-from quotas_forecasting.forecasting.experimental.gam import gam_forecast
+from adoption_forecaster.forecasting.experimental.gam import gam_forecast
 
 YEARS = np.arange(2004, 2023)
 

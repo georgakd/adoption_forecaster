@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction import benchmark_cli
-from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient, get_llm_client  # noqa: F401
-from quotas_forecasting.correction.oracle import build_oracle_client
-from quotas_forecasting.synthetic.benchmark import build_benchmark
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction import benchmark_cli
+from adoption_forecaster.correction.llm import LLMResponse, ScriptedClient, get_llm_client  # noqa: F401
+from adoption_forecaster.correction.oracle import build_oracle_client
+from adoption_forecaster.synthetic.benchmark import build_benchmark
 
 ARGS = ["--module", "education", "--seeds", "0", "--n-countries", "5"]
 

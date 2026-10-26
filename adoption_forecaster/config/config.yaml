@@ -1,0 +1,242 @@
+# Configuration file for Adoption Forecaster System
+# This file contains all configurable settings for both Education and Age_Gender modules
+
+# Global settings applied to all modules
+defaults:
+  mode: "prod"
+  auto_fetch: false
+  local_data_dir: null  # when set, local mode reads/writes <dir>/<Namespace>/{input,output} instead of the package dir
+  bucket_name: "ml-quotas-forecasting"
+  project_id: "339766178133"
+  bucket_name_external: "universe-bucket-staging" #Andromeda's bucket "universe-bucket-production"---> production
+  dir_external: "population_modelling_projections" #Andromeda's folder in gcs bucket
+  methodology: "both"
+  methodology_enum: ["baseline", "ceiling", "age_groups", "both"]
+
+# GCS settings
+gcs:
+  data_source: "Test_Eurostat" #Should be "Eurostat" for pubsub
+  input_subfolder: "input"
+
+# Pub/Sub
+pubsub:
+  enable_notifications: false #true if  we want to send notifications
+  topic_name: "population-modelling-files-notifications" #topic name created by Andromeda
+  service_account: "quotas-forecasting@ml-cloud-374512.iam.gserviceaccount.com" #ML team srvc account
+  sub_project_id: "464955218160" # "1050241395899" id for data-pooling-p project (production), if needed it can be changed  to data-pooling-s (for testing) with id:"464955218160"
+
+secrets:
+  openai_api_key: "quotas-forecasting-openai-api-key"
+# Eurostat settings
+eurostat:
+  dataset_codes:
+          - "ISOC_CI_IFP_IU"
+          - "EDAT_LFSE_03"
+          - "DEMO_PJAN"
+
+  countries: [
+    "Austria",
+    "Belgium",
+    "Bulgaria",
+    "Croatia",
+    "Czechia",
+    "Denmark",
+    "France",
+    "Germany",
+    "Greece",
+    "Hungary",
+    "Ireland",
+    "Italy",
+    "Netherlands",
+    "Norway",
+    "Poland",
+    "Portugal",
+    "Romania",
+    "Serbia",
+    "Spain",
+    "Sweden",
+    "Switzerland",
+    "Türkiye"
+  ]
+  api:
+    catalogue_url: "https://ec.europa.eu/eurostat/api/dissemination/catalogue/toc/txt?lang=en"
+    data_url_template: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{code}?format=JSON"
+
+
+# # Target markets and proxy countries
+target_markets: {}
+#below countries are not part of MVP
+  # "United Kingdom":
+  #   - "Austria"
+  #   - "Belgium"
+  #   - "Luxemburg"
+  #   - "Germany"
+  #   - "Denmark"
+  #   - "Netherlands"
+  # "North Macedonia":
+  #   - "Greece"
+  #   - "Bulgaria"
+  #   - "Cyprus"
+  #   - "Czechia"
+  #   - "Italy"
+  #   - "Lithuania"
+  # "Iceland":
+  #   - "Netherlands"
+  #   - "Sweden"
+  #   - "Denmark"
+
+# Module-specific configurations
+modules:
+  education:
+    # File configurations for Education module
+    files:
+      population_ratios: "population_ratios_by_education"
+      total_population_by_age_range: "total_population_by_age_range"
+      internet_penetration_population: "internet_penetration_ratios_by_education"
+
+
+    # Output settings
+    output:
+      directory: "./output"
+      # Specific output file names
+      predictions_only_16_64: "Education_16-64_predictions"
+      predictions_only_16_74: "Education_16-74_predictions"
+      past_data_and_predictions_16_64: "Education_16-64_predictions_with_past_data"
+      past_data_and_predictions_16_74: "Education_16-74_predictions_with_past_data"
+
+
+    # Education-specific settings
+    settings:
+      age_groups: ["16_64", "16_74"]
+      education_levels: ["secondary", "tertiary"]
+      correlation_threshold: 0.8
+      correlation_threshold_low: 0.5
+      interpolation_method: "linear"
+      interpolation_years_back: 6
+      n_predictions: 2
+      theta_weight: 0.7
+      random_walk_weight: 0.3
+
+    # Data processing settings
+    processing:
+      regex_patterns:
+        country: "country"
+        education: "education.*level"
+        age_group: "age.*group"
+        individual_type: "individual.*type"
+        # year: "20\\d{2}"
+
+      country_mapping:
+        Austria: ["Austria"]
+        Belgium: ["Belgium"]
+        Bulgaria: ["Bulgaria"]
+        Croatia: ["Croatia"]
+        Czech Republic: ["Czechia", "Czech Republic"]
+        Denmark: ["Denmark"]
+        France: ["France"]
+        Germany: ["Germany"]
+        Greece: ["Greece"]
+        Hungary: ["Hungary"]
+        Ireland: ["Ireland"]
+        Italy: ["Italy"]
+        Netherlands: ["Netherlands"]
+        Norway: ["Norway"]
+        Poland: ["Poland"]
+        Portugal: ["Portugal"]
+        Romania: ["Romania"]
+        Serbia: ["Serbia"]
+        Spain: ["Spain"]
+        Sweden: ["Sweden"]
+        Switzerland: ["Switzerland"]
+        Turkey: ["Türkiye"]
+
+
+  age_gender:
+    # File configurations for Age_Gender module
+    files:
+      age_gender: "internet_penetration_by_age_group_and_gender"
+
+    # Output settings
+    output:
+      past_data_and_predictions: "Age_Gender_16-74_predictions_with_past_data"
+      predictions_only: "Age_Gender_16-74_predictions"
+      directory: "./output"
+
+
+    # Age_Gender-specific settings
+    settings:
+      clip_predictions: true
+      n_predictions: 2
+      r_guess: 0.1
+      r_max: 10
+      start_year: 2017
+      K_guess_factor: 0.99
+      K_max: 0.995
+      theta_weight: 0.3333333333333334
+      random_walk_weight: 0.3333333333333333
+      logistic_weight: 0.3333333333333333
+      younger_age_groups: ["16_24", "25_34", "35_44", "45_54", "55_64"]
+      older_age_groups: ["55_64", "65_74"]
+
+# Validation settings
+validation:
+  year_difference: 2
+
+# prediction algorithm settings
+prediction:
+  # Forecasting method. Only "ensemble" (Theta/random walk/logistic blend) is accepted; the experimental GAM and balancing
+  # forecasters did not pass the decision rule in docs/MODEL_REVIEW.md and are not wired in.
+  method: "ensemble"
+  # Random walk settings
+  random_walk:
+    lookback_period: 3  # Number of years to look back for drift calculation (diff()[-3:])
+
+  # Theta forecasting settings
+  theta:
+    deseasonalize: false  # Whether to deseasonalize the data
+    seasonal_period: 1    # Seasonal period (sp=1)
+    return_last_n: 2      # Number of last predictions to return (theta_pred[-2:])
+  # LASSO regression settings
+  lasso:
+    random_state: 42      # Random state for reproducibility
+    max_iterations: 10000 # Maximum iterations for convergence
+    min_samples_for_cv: 5 # Minimum samples required for cross-validation
+    default_cv_folds: 5   # Default number of CV folds when enough samples
+  # Time series settings
+  time_series:
+    start_year: 2004      # Start year for historical data
+    min_training_year: 2010  # Minimum year for training data
+    backtest_start_year: 2015  # Start year for backtesting
+    gender_data_start_year: 2017  # Start year for gender-specific data
+    past_data_start_year: 2020
+  # data preprocessing
+  preprocessing:
+    clip_predictions: true  # Whether to clip predictions to [0, 100]
+    fill_missing_with: ":"  # Value to use for missing data
+    scaling_factor: 100     # Factor to scale data by (divide by 100 for LASSO)
+    prediction_precision: 6  # Decimal precision for predictions
+    min_prediction: 0       # Minimum prediction value
+    max_prediction: 1     # Maximum prediction value
+    interpolation_method: "linear"  # Interpolation method
+    interpolation_direction: "both"  # Interpolation direction
+    historical_years_back: 6  # Years back for historical data display
+    previous_year_offset: 1  # Offset for previous year calculations
+    adjustment_year_offset: 2  # Offset for year adjustments
+
+correction:
+  enabled: false
+  max_yoy_change: 0.10
+  # per country-segment cap = clamp(k * max(own, peers') quantile of historical |yoy change|, floor, ceiling); see correction/caps.py
+  # mode "fixed" applies max_yoy_change to every segment (k and quantile were chosen after viewing origin 2022)
+  yoy_cap:
+    mode: "adaptive"
+    quantile: 0.9
+    k: 3.0
+    floor: 0.03
+    ceiling: 0.30
+  citation_tolerance: 0.005
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
+  max_iterations_per_segment: 6
+  max_llm_retries: 3
+  max_suspects: 25  # the planner's suspects beyond this many are logged as ignored, not researched
+  on_failure: "fallback_to_baseline"  # informational: on any agent failure the baseline (plus corrections accepted so far) is kept

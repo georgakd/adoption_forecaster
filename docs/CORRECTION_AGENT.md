@@ -20,9 +20,9 @@ predictor frame --to_table--> baseline ForecastTable --run_correction(store, llm
                                                                                    --from_table--> same-shape frame
 ```
 
-Code: `quotas_forecasting/correction/` (`agent.py` loop, `tools.py` gate and tools, `citations.py`, `constraints.py`, `llm.py`, `sources.py`, `pipeline.py` hook, `evaluation.py`, `oracle.py` and `benchmark_cli.py` for the benchmark).
+Code: `adoption_forecaster/correction/` (`agent.py` loop, `tools.py` gate and tools, `citations.py`, `constraints.py`, `llm.py`, `sources.py`, `pipeline.py` hook, `evaluation.py`, `oracle.py` and `benchmark_cli.py` for the benchmark).
 
-## Configuration (`correction:` in `quotas_forecasting/config/config.yaml`)
+## Configuration (`correction:` in `adoption_forecaster/config/config.yaml`)
 
 | Key | Meaning |
 |---|---|
@@ -45,15 +45,15 @@ The benchmark builds a seeded synthetic world, runs the real forecasting pipelin
 ```bash
 # Stub mode (default): an oracle script stands in for a perfect model. No network, no key. This is a local gate: no CI workflow
 # runs it (.github/workflows only build the Docker image, compare pipeline outputs and deploy).
-python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-4
-python -m quotas_forecasting.correction.benchmark_cli --module age_gender --seeds 0-2 --n-countries 5
+python -m adoption_forecaster.correction.benchmark_cli --module education --seeds 0-4
+python -m adoption_forecaster.correction.benchmark_cli --module age_gender --seeds 0-2 --n-countries 5
 
 # Held-out seeds (100+): defaults to HELDOUT_SEEDS when --seeds is not given
-python -m quotas_forecasting.correction.benchmark_cli --module education --heldout
+python -m adoption_forecaster.correction.benchmark_cli --module education --heldout
 
 # Live mode: a real model. Export the key in your own shell, never in a file.
 export NVIDIA_API_KEY=...   # your key
-python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-2 --n-countries 5 --live --model <model-id>
+python -m adoption_forecaster.correction.benchmark_cli --module education --seeds 0-2 --n-countries 5 --live --model <model-id>
 ```
 
 Options: `--seeds` takes `a-b` ranges and comma lists (`0-2,7`), default `0-2`; `--n-countries N` (default 8); `--model` overrides `correction.model` in memory only; `--out DIR` (default `benchmark_results`, git-ignored). Live runs print the number of LLM calls and elapsed seconds so cost stays visible.
@@ -95,9 +95,9 @@ Snippets expose only `doc_id, publisher, country, year, title`. Then implement `
 
 ```bash
 # stub (oracle) mode, offline once the cache exists
-python -m quotas_forecasting.correction.benchmark_cli --module education --real --seeds 0-1
+python -m adoption_forecaster.correction.benchmark_cli --module education --real --seeds 0-1
 # live mode (same key rule as above)
-python -m quotas_forecasting.correction.benchmark_cli --module education --real --live
+python -m adoption_forecaster.correction.benchmark_cli --module education --real --live
 ```
 
 The JSON `config` records `"source": "real-backtest"`, `cut_year` and `pred_year` (`n_countries` is `null`: all fetched countries are used).

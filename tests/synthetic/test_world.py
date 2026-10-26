@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.data_handlers.loader import Loader
-from quotas_forecasting.data_handlers.missing_data_handlers import MissingDataHandler
-from quotas_forecasting.synthetic.world import generate_world
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.data_handlers.loader import Loader
+from adoption_forecaster.data_handlers.missing_data_handlers import MissingDataHandler
+from adoption_forecaster.synthetic.world import generate_world
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 
 TIMESTAMP = r"\d{4}-\d{2}-\d{2}T\d{2}_\d{2}_\d{2}\+0000"
 
@@ -102,7 +102,7 @@ def test_written_inputs_parse_with_missing_data_handler(tmp_path, config):
     start = config["modules"]["age_gender"]["settings"]["start_year"]
     ag = ag[["country", "Individual type"] + [str(y) for y in range(start, w.last_year + 1)]]
     assert set(ag["country"]) == set(w.countries)
-    from quotas_forecasting.forecasting.processors import AgeGenderProcessor
+    from adoption_forecaster.forecasting.processors import AgeGenderProcessor
 
     p = AgeGenderProcessor(config=config)
     assert p.extract_age_groups(ag["Individual type"].iloc[0])

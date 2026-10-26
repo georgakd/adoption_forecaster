@@ -39,7 +39,7 @@
 ### Task 1: Synthetic world generator
 
 **Files:**
-- Create: `quotas_forecasting/synthetic/__init__.py`, `quotas_forecasting/synthetic/world.py`, `quotas_forecasting/synthetic/writers.py`
+- Create: `adoption_forecaster/synthetic/__init__.py`, `adoption_forecaster/synthetic/world.py`, `adoption_forecaster/synthetic/writers.py`
 - Create: `tests/__init__.py`, `tests/synthetic/test_world.py`
 - Modify: `pyproject.toml` (add `pytest` to the dev group; add `openai` and `pydantic` to main dependencies now, used from Task 8)
 
@@ -64,12 +64,12 @@
 ### Task 2: Local data-dir override and golden end-to-end test
 
 **Files:**
-- Modify: `quotas_forecasting/config/config.yaml` (add `defaults.local_data_dir: null`), `quotas_forecasting/data_handlers/loader.py` (`_setup_local_input_folder`, around lines 44-89), `quotas_forecasting/data_handlers/file_writer.py` (`_get_local_path`, around lines 148-154)
+- Modify: `adoption_forecaster/config/config.yaml` (add `defaults.local_data_dir: null`), `adoption_forecaster/data_handlers/loader.py` (`_setup_local_input_folder`, around lines 44-89), `adoption_forecaster/data_handlers/file_writer.py` (`_get_local_path`, around lines 148-154)
 - Create: `tests/e2e/test_pipeline_local.py`, `tests/conftest.py`, `tests/golden/` (generated files)
 
 **Interfaces:**
 - Consumes: `generate_world`, `write_education_inputs`, `write_age_gender_inputs` (Task 1).
-- Produces: fixture `local_config(tmp_path) -> dict` (deep copy of `load_config()` with `defaults.local_data_dir` set to `tmp_path`, `pubsub.enable_notifications=False`, `defaults.auto_fetch=False`); fixture `world`; `run_single_module(...)` from `quotas_forecasting/main.py` is the entry the tests call. When `local_data_dir` is set, the Loader reads and the FileWriter writes under `<local_data_dir>/<Namespace>/{input,output}` and `_setup_local_input_folder` does not move files out of the package dir.
+- Produces: fixture `local_config(tmp_path) -> dict` (deep copy of `load_config()` with `defaults.local_data_dir` set to `tmp_path`, `pubsub.enable_notifications=False`, `defaults.auto_fetch=False`); fixture `world`; `run_single_module(...)` from `adoption_forecaster/main.py` is the entry the tests call. When `local_data_dir` is set, the Loader reads and the FileWriter writes under `<local_data_dir>/<Namespace>/{input,output}` and `_setup_local_input_folder` does not move files out of the package dir.
 
 - [ ] **Step 1: Write failing tests.**
   - `test_education_pipeline_writes_expected_outputs`: after `run_single_module("education", "local", ..., pred_year=2026, last_year=2024, config=local_config)`, four CSVs exist for 16-64/16-74 predictions and past-data. Assert the files exist: the processors catch and log exceptions, so a silent failure otherwise looks like success.
@@ -84,13 +84,13 @@
 ### Task 3: Emulators and prod-path end-to-end test
 
 **Files:**
-- Create: `docker-compose.emulators.yml`, `quotas_forecasting/services/gcp_clients.py`, `tests/e2e/test_pipeline_prod_emulators.py`
-- Modify: `quotas_forecasting/data_handlers/loader.py` (prod branch, lines 33-42), `quotas_forecasting/data_handlers/file_writer.py` (prod branch, lines 73-97), `quotas_forecasting/services/message_serializer.py` (lines 39-56)
+- Create: `docker-compose.emulators.yml`, `adoption_forecaster/services/gcp_clients.py`, `tests/e2e/test_pipeline_prod_emulators.py`
+- Modify: `adoption_forecaster/data_handlers/loader.py` (prod branch, lines 33-42), `adoption_forecaster/data_handlers/file_writer.py` (prod branch, lines 73-97), `adoption_forecaster/services/message_serializer.py` (lines 39-56)
 
 **Interfaces:**
 - Produces: `get_credentials(config: dict) -> google.auth.credentials.Credentials` in `gcp_clients.py`: returns `AnonymousCredentials()` when `STORAGE_EMULATOR_HOST` or `PUBSUB_EMULATOR_HOST` is set, otherwise the existing Secret Manager service-account credentials. `Loader`, `FileWriter` and `MessageSerializer` use it instead of calling Secret Manager or `google.auth.default()` directly. Pytest marker `emulators` (registered in `pyproject.toml`), skipped unless `STORAGE_EMULATOR_HOST` and `PUBSUB_EMULATOR_HOST` are set. Fixture `emulator_config` sets `gcs.data_source="Eurostat"`, `pubsub.enable_notifications=True`, buckets `ml-quotas-forecasting` and `universe-bucket-staging`.
 
-- [ ] **Step 1: Write the failing test `test_prod_pipeline_uploads_and_notifies`** (marker `emulators`). Create both buckets and the topic plus a pull subscription, upload the synthetic inputs under `Eurostat/<Namespace>/input/` using colon timestamps as GCS expects, run `run_single_module(..., mode="prod")` for both modules. Assert: internal bucket holds the outputs under `Eurostat/<Namespace>/output/`; external bucket holds `2026_*_with_past_data_both.csv` under `population_modelling_projections/`; three messages pulled, each parses as `ModellingOutputFile` with `sender == "quotas_forecasting"`, `projection_year == 2026`, and `file_type` in `{AGE_AND_GENDER, EDUCATION_16_TO_64, EDUCATION_16_TO_74}`.
+- [ ] **Step 1: Write the failing test `test_prod_pipeline_uploads_and_notifies`** (marker `emulators`). Create both buckets and the topic plus a pull subscription, upload the synthetic inputs under `Eurostat/<Namespace>/input/` using colon timestamps as GCS expects, run `run_single_module(..., mode="prod")` for both modules. Assert: internal bucket holds the outputs under `Eurostat/<Namespace>/output/`; external bucket holds `2026_*_with_past_data_both.csv` under `population_modelling_projections/`; three messages pulled, each parses as `ModellingOutputFile` with `sender == "adoption_forecaster"`, `projection_year == 2026`, and `file_type` in `{AGE_AND_GENDER, EDUCATION_16_TO_64, EDUCATION_16_TO_74}`.
 - [ ] **Step 2: Run `docker compose -f docker-compose.emulators.yml up -d`, export the emulator env vars printed in the compose file comments, run `pytest -m emulators -v`. Expected: FAIL.**
 - [ ] **Step 3: Write the compose file and `gcp_clients.get_credentials`; switch the three call sites.** Emulator images are the builder's choice; the compose file documents the two env vars to export. Production behavior without emulator env vars must be identical.
 - [ ] **Step 4: Run `pytest -m emulators -v` and then `pytest -v` (emulators skipped). Expected: PASS.**
@@ -99,14 +99,14 @@
 ### Task 4: Make `AI_adjustments` a package and fix docs drift
 
 **Files:**
-- Create: `quotas_forecasting/AI_adjustments/__init__.py`, `tests/test_ai_adjustments_import.py`
-- Modify: every `quotas_forecasting/AI_adjustments/*.py` (flat imports such as `from client import AIClient` become `from quotas_forecasting.AI_adjustments.client import AIClient`), `pyproject.toml` (no new deps; `openai` and `pydantic` came in Task 1), `quotas_forecasting/AI_adjustments/README.md`, `README.md`, `docs/ARCHITECTURE.md`
-- Delete: `quotas_forecasting/AI_adjustments/requirements.txt`
+- Create: `adoption_forecaster/AI_adjustments/__init__.py`, `tests/test_ai_adjustments_import.py`
+- Modify: every `adoption_forecaster/AI_adjustments/*.py` (flat imports such as `from client import AIClient` become `from adoption_forecaster.AI_adjustments.client import AIClient`), `pyproject.toml` (no new deps; `openai` and `pydantic` came in Task 1), `adoption_forecaster/AI_adjustments/README.md`, `README.md`, `docs/ARCHITECTURE.md`
+- Delete: `adoption_forecaster/AI_adjustments/requirements.txt`
 
 **Interfaces:**
-- Produces: `python -m quotas_forecasting.AI_adjustments.main --help` works from the repo root and from any other cwd.
+- Produces: `python -m adoption_forecaster.AI_adjustments.main --help` works from the repo root and from any other cwd.
 
-- [ ] **Step 1: Write failing tests.** `test_modules_import_from_any_cwd` imports `agent`, `client`, `tools`, `rules`, `workflow_enforcer` under `quotas_forecasting.AI_adjustments` with `monkeypatch.chdir(tmp_path)`; `test_cli_help_runs` runs `python -m quotas_forecasting.AI_adjustments.main --help` via `subprocess` from `tmp_path` with `PYTHONPATH` set to the repo root and asserts exit code 0.
+- [ ] **Step 1: Write failing tests.** `test_modules_import_from_any_cwd` imports `agent`, `client`, `tools`, `rules`, `workflow_enforcer` under `adoption_forecaster.AI_adjustments` with `monkeypatch.chdir(tmp_path)`; `test_cli_help_runs` runs `python -m adoption_forecaster.AI_adjustments.main --help` via `subprocess` from `tmp_path` with `PYTHONPATH` set to the repo root and asserts exit code 0.
 - [ ] **Step 2: Run `pytest tests/test_ai_adjustments_import.py -v`. Expected: FAIL (`ModuleNotFoundError: client`).**
 - [ ] **Step 3: Rewrite imports and drop the separate requirements file.** No behavior changes. In the READMEs replace "run with this folder as cwd" with the `python -m` invocation and correct the references to `cloudbuild.yaml` and `post-merge-run-forecast.yml` (the file is `post-merge-run-full-pipeline.yml`; `cloudbuild.yaml` does not exist).
 - [ ] **Step 4: Run `pytest -v`. Expected: PASS, including the Task 2 goldens.**
@@ -115,8 +115,8 @@
 ### Task 5: Forecast table, adapters and hard-constraint verifier
 
 **Files:**
-- Create: `quotas_forecasting/correction/__init__.py`, `quotas_forecasting/correction/types.py`, `quotas_forecasting/correction/adapters.py`, `quotas_forecasting/correction/constraints.py`, `tests/correction/test_adapters.py`, `tests/correction/test_constraints.py`
-- Modify: `quotas_forecasting/config/config.yaml` (add `correction:` block with `enabled: false`, `max_yoy_change: 0.10`, `citation_tolerance: 0.005`, `model: null`, `max_iterations_per_segment: 6`, `max_llm_retries: 3`)
+- Create: `adoption_forecaster/correction/__init__.py`, `adoption_forecaster/correction/types.py`, `adoption_forecaster/correction/adapters.py`, `adoption_forecaster/correction/constraints.py`, `tests/correction/test_adapters.py`, `tests/correction/test_constraints.py`
+- Modify: `adoption_forecaster/config/config.yaml` (add `correction:` block with `enabled: false`, `max_yoy_change: 0.10`, `citation_tolerance: 0.005`, `model: null`, `max_iterations_per_segment: 6`, `max_llm_retries: 3`)
 
 **Interfaces:**
 - Produces:
@@ -134,7 +134,7 @@
 ### Task 6: Synthetic sources, store and benchmark builder
 
 **Files:**
-- Create: `quotas_forecasting/synthetic/sources.py`, `quotas_forecasting/synthetic/benchmark.py`, `quotas_forecasting/correction/sources.py`, `tests/synthetic/test_benchmark.py`
+- Create: `adoption_forecaster/synthetic/sources.py`, `adoption_forecaster/synthetic/benchmark.py`, `adoption_forecaster/correction/sources.py`, `tests/synthetic/test_benchmark.py`
 
 **Interfaces:**
 - Consumes: `generate_world`, `World`, `to_table`, the real predictors/processors (Tasks 1, 2, 5).
@@ -155,7 +155,7 @@
 ### Task 7: Citation verifier and evaluation harness
 
 **Files:**
-- Create: `quotas_forecasting/correction/citations.py`, `quotas_forecasting/correction/evaluation.py`, `tests/correction/test_citations.py`, `tests/correction/test_evaluation.py`
+- Create: `adoption_forecaster/correction/citations.py`, `adoption_forecaster/correction/evaluation.py`, `tests/correction/test_citations.py`, `tests/correction/test_evaluation.py`
 
 **Interfaces:**
 - Consumes: `SourceStore`, `ForecastTable`, `check_constraints` (Tasks 5, 6).
@@ -174,7 +174,7 @@
 ### Task 8: LLM client (NVIDIA endpoint and scripted stub)
 
 **Files:**
-- Create: `quotas_forecasting/correction/llm.py`, `tests/correction/test_llm.py`
+- Create: `adoption_forecaster/correction/llm.py`, `tests/correction/test_llm.py`
 
 **Interfaces:**
 - Produces:
@@ -193,7 +193,7 @@
 ### Task 9: Agent tools and verifier gate
 
 **Files:**
-- Create: `quotas_forecasting/correction/tools.py`, `tests/correction/test_tools.py`
+- Create: `adoption_forecaster/correction/tools.py`, `tests/correction/test_tools.py`
 
 **Interfaces:**
 - Consumes: `SourceStore`, `ForecastTable`, `Correction`, `Citation`, `verify_citation`, `check_constraints` (Tasks 5-7).
@@ -214,7 +214,7 @@
 ### Task 10: Agent loop (planner, researcher, retries, budget)
 
 **Files:**
-- Create: `quotas_forecasting/correction/agent.py`, `tests/correction/test_agent.py`
+- Create: `adoption_forecaster/correction/agent.py`, `tests/correction/test_agent.py`
 
 **Interfaces:**
 - Consumes: `LLMClient`, `ScriptedClient`, `CorrectionSession`, `tool_schemas` (Tasks 8, 9).
@@ -233,15 +233,15 @@
   - `test_nan_cells_stay_nan` (baseline with `":"`/NaN placeholders yields a corrected table with the same NaN positions).
   - `test_age_gender_module_runs` (same flow with `module="age_gender"`).
 - [ ] **Step 2: Run `pytest tests/correction/test_agent.py -v`. Expected: FAIL.**
-- [ ] **Step 3: Implement `run_correction` and the planner/researcher system prompts** (prompts live in `quotas_forecasting/correction/prompts.py`; state the hard constraints, that citations are mandatory, that leaving a value unchanged is a valid outcome, and that tertiary is derived).
+- [ ] **Step 3: Implement `run_correction` and the planner/researcher system prompts** (prompts live in `adoption_forecaster/correction/prompts.py`; state the hard constraints, that citations are mandatory, that leaving a value unchanged is a valid outcome, and that tertiary is derived).
 - [ ] **Step 4: Run `pytest tests/correction -v`. Expected: PASS.**
 - [ ] **Step 5: Commit** `feat: autonomous correction agent loop`
 
 ### Task 11: Pipeline integration behind a config flag
 
 **Files:**
-- Modify: `quotas_forecasting/forecasting/processors.py` (Education: between `predictor.predict(...)` and `_save_education_predictions`, around lines 112-122; Age_Gender: after `predictor.run_with_data(...)` and before the rename/save, around lines 291-327), `quotas_forecasting/main.py` (`run_single_module`, lines 32-78), `quotas_forecasting/config/config.yaml` (`correction.on_failure: "fallback_to_baseline"`)
-- Create: `quotas_forecasting/correction/pipeline.py`, `tests/e2e/test_pipeline_with_correction.py`
+- Modify: `adoption_forecaster/forecasting/processors.py` (Education: between `predictor.predict(...)` and `_save_education_predictions`, around lines 112-122; Age_Gender: after `predictor.run_with_data(...)` and before the rename/save, around lines 291-327), `adoption_forecaster/main.py` (`run_single_module`, lines 32-78), `adoption_forecaster/config/config.yaml` (`correction.on_failure: "fallback_to_baseline"`)
+- Create: `adoption_forecaster/correction/pipeline.py`, `tests/e2e/test_pipeline_with_correction.py`
 
 **Interfaces:**
 - Consumes: `get_llm_client`, `run_correction`, `to_table`, `from_table` (Tasks 5, 8, 10).
@@ -261,25 +261,25 @@
 ### Task 12: Benchmark runner and live run
 
 **Files:**
-- Create: `quotas_forecasting/correction/benchmark_cli.py`, `tests/correction/test_benchmark_cli.py`, `docs/CORRECTION_AGENT.md`
+- Create: `adoption_forecaster/correction/benchmark_cli.py`, `tests/correction/test_benchmark_cli.py`, `docs/CORRECTION_AGENT.md`
 - Modify: `README.md` (link to the new doc), `.gitignore` (`benchmark_results/`)
 
 **Interfaces:**
 - Consumes: `build_benchmark`, `SyntheticSourceStore`, `run_correction`, `evaluate`, `get_llm_client`, `DEV_SEEDS`, `HELDOUT_SEEDS`.
-- Produces: `python -m quotas_forecasting.correction.benchmark_cli --module {education,age_gender} --seeds 0-4 [--live] [--heldout] [--n-countries N]` writing `benchmark_results/<timestamp>.json` with per-seed `EvalReport` fields and the aggregate; exit code non-zero when, in stub mode, hallucinations or violations are non-zero. Stub mode uses an oracle `ScriptedClient` built from the benchmark docs (proposes the true cited value for each shocked country that has a verifiable doc).
+- Produces: `python -m adoption_forecaster.correction.benchmark_cli --module {education,age_gender} --seeds 0-4 [--live] [--heldout] [--n-countries N]` writing `benchmark_results/<timestamp>.json` with per-seed `EvalReport` fields and the aggregate; exit code non-zero when, in stub mode, hallucinations or violations are non-zero. Stub mode uses an oracle `ScriptedClient` built from the benchmark docs (proposes the true cited value for each shocked country that has a verifiable doc).
 
 - [ ] **Step 1: Write failing tests.** `test_stub_mode_gate_passes_with_oracle_script` (aggregate `mae_after < mae_before`, zero hallucinations, zero violations, exit code 0); `test_stub_mode_gate_fails_when_script_hallucinates` (exit code non-zero); `test_live_flag_without_key_exits_with_clear_message`.
 - [ ] **Step 2: Run `pytest tests/correction/test_benchmark_cli.py -v`. Expected: FAIL.**
 - [ ] **Step 3: Implement the CLI and write `docs/CORRECTION_AGENT.md`** (how to run stub and live, config keys, what the metrics mean, how to add sources in milestone 2).
 - [ ] **Step 4: Run `pytest -v`. Expected: PASS.**
-- [ ] **Step 5: Live run (acceptance).** With the user's `NVIDIA_API_KEY` exported in their shell, run `python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-2 --n-countries 5 --live`, then the same for `age_gender`. Choose a strong tool-calling model from build.nvidia.com and set `correction.model` in `config.yaml` (smoke-test it with one call first). Record the aggregate `mae_before`, `mae_after`, hallucination and violation counts in `docs/CORRECTION_AGENT.md`; report honestly if the live model misses the target.
+- [ ] **Step 5: Live run (acceptance).** With the user's `NVIDIA_API_KEY` exported in their shell, run `python -m adoption_forecaster.correction.benchmark_cli --module education --seeds 0-2 --n-countries 5 --live`, then the same for `age_gender`. Choose a strong tool-calling model from build.nvidia.com and set `correction.model` in `config.yaml` (smoke-test it with one call first). Record the aggregate `mae_before`, `mae_after`, hallucination and violation counts in `docs/CORRECTION_AGENT.md`; report honestly if the live model misses the target.
 - [ ] **Step 6: Commit** `feat: benchmark runner, docs and first live run results`
 
 ### Task 13: Real-data backtest from Eurostat (runs after Task 12)
 
 **Files:**
-- Create: `quotas_forecasting/backtest/__init__.py`, `quotas_forecasting/backtest/eurostat_backtest.py`, `tests/e2e/test_real_backtest.py`
-- Modify: `quotas_forecasting/correction/benchmark_cli.py` (add `--real` flag), `pyproject.toml` (register marker `realdata`), `.gitignore` (add `.cache/`), `docs/CORRECTION_AGENT.md`
+- Create: `adoption_forecaster/backtest/__init__.py`, `adoption_forecaster/backtest/eurostat_backtest.py`, `tests/e2e/test_real_backtest.py`
+- Modify: `adoption_forecaster/correction/benchmark_cli.py` (add `--real` flag), `pyproject.toml` (register marker `realdata`), `.gitignore` (add `.cache/`), `docs/CORRECTION_AGENT.md`
 
 **Interfaces:**
 - Consumes: `EurostatDataFetcher(last_year_of_observations: int, config: dict).fetch_data() -> bool`, `run_single_module`, the Task 3 emulator fixtures, `to_table`, `make_docs`, `Benchmark`, `SyntheticSourceStore`, `evaluate` (Tasks 2, 3, 5, 6, 7).
@@ -291,14 +291,14 @@
 - [ ] **Step 2: Run `QF_REALDATA=1 pytest -m realdata -v` with emulators up. Expected: FAIL.**
 - [ ] **Step 3: Implement the module and the `--real` flag.** If the fetcher cannot reproduce an input file the pipeline needs (a `config.yaml` comment mentions files "provided by GR"), do not fabricate it: finish what works, list the missing files in your report and in `docs/CORRECTION_AGENT.md`, and report DONE_WITH_CONCERNS.
 - [ ] **Step 4: Run `pytest -v` (realdata skipped) and `QF_REALDATA=1 pytest -m realdata -v`. Expected: PASS.**
-- [ ] **Step 5: Live real-data run (controller, same key rule as Task 12).** `python -m quotas_forecasting.correction.benchmark_cli --module education --real --live`; record the aggregate result in `docs/CORRECTION_AGENT.md`.
+- [ ] **Step 5: Live real-data run (controller, same key rule as Task 12).** `python -m adoption_forecaster.correction.benchmark_cli --module education --real --live`; record the aggregate result in `docs/CORRECTION_AGENT.md`.
 - [ ] **Step 6: Commit** `feat: real-data Eurostat backtest`
 
 ### Task 14: Maths review and alternative forecasting methods (runs after Task 13)
 
 **Files:**
-- Create: `quotas_forecasting/forecasting/experimental/__init__.py`, `quotas_forecasting/forecasting/experimental/gam.py`, `quotas_forecasting/forecasting/experimental/balancing.py`, `quotas_forecasting/backtest/compare.py`, `tests/experimental/test_gam.py`, `tests/experimental/test_balancing.py`, `tests/experimental/test_compare.py`, `docs/MODEL_REVIEW.md`
-- Modify: `pyproject.toml` (add `pygam`), `quotas_forecasting/config/config.yaml` (add `prediction.method: "ensemble"`), `quotas_forecasting/forecasting/predictors.py` (read `prediction.method`; `"ensemble"` is the current behavior)
+- Create: `adoption_forecaster/forecasting/experimental/__init__.py`, `adoption_forecaster/forecasting/experimental/gam.py`, `adoption_forecaster/forecasting/experimental/balancing.py`, `adoption_forecaster/backtest/compare.py`, `tests/experimental/test_gam.py`, `tests/experimental/test_balancing.py`, `tests/experimental/test_compare.py`, `docs/MODEL_REVIEW.md`
+- Modify: `pyproject.toml` (add `pygam`), `adoption_forecaster/config/config.yaml` (add `prediction.method: "ensemble"`), `adoption_forecaster/forecasting/predictors.py` (read `prediction.method`; `"ensemble"` is the current behavior)
 
 **Interfaces:**
 - Consumes: the synthetic benchmark (Task 6), the real-data backtest and cache (Task 13), the existing predictors (`predict_random_walk`, `fit_predict_theta`, logistic and LASSO paths in `predictors.py`).
@@ -321,8 +321,8 @@
 ### Task 15: Adaptive year-over-year cap calibrated on real observations (runs after Task 14, before the final review)
 
 **Files:**
-- Create: `quotas_forecasting/correction/caps.py`, `tests/correction/test_caps.py`
-- Modify: `quotas_forecasting/correction/constraints.py`, `quotas_forecasting/correction/tools.py`, `quotas_forecasting/correction/evaluation.py`, `quotas_forecasting/correction/agent.py` and `quotas_forecasting/correction/prompts.py` (show the per-segment cap to the model), `quotas_forecasting/config/config.yaml`, `tests/e2e/test_real_backtest.py` (offline check on the cache), `docs/CORRECTION_AGENT.md`
+- Create: `adoption_forecaster/correction/caps.py`, `tests/correction/test_caps.py`
+- Modify: `adoption_forecaster/correction/constraints.py`, `adoption_forecaster/correction/tools.py`, `adoption_forecaster/correction/evaluation.py`, `adoption_forecaster/correction/agent.py` and `adoption_forecaster/correction/prompts.py` (show the per-segment cap to the model), `adoption_forecaster/config/config.yaml`, `tests/e2e/test_real_backtest.py` (offline check on the cache), `docs/CORRECTION_AGENT.md`
 
 **Interfaces:**
 - Consumes: `ForecastTable`, `check_constraints`, `introduced_violations`, `CorrectionSession`, `evaluate` (Tasks 5, 7, 9).

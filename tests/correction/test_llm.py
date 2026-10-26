@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from quotas_forecasting.correction.llm import (
+from adoption_forecaster.correction.llm import (
     LLMResponse,
     LLMUnavailableError,
     MissingApiKeyError,

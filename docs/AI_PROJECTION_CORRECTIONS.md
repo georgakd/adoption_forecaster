@@ -1,8 +1,8 @@
 # AI projection corrections (`AI_adjustments`)
 
-Conceptual and architectural reference for the **LLM-based post-processing** package under `quotas_forecasting/AI_adjustments/`.
+Conceptual and architectural reference for the **LLM-based post-processing** package under `adoption_forecaster/AI_adjustments/`.
 
-**Operational detail** (exact CLI commands, install steps, directory tree, per-file APIs, adding tools): **[`quotas_forecasting/AI_adjustments/README.md`](../quotas_forecasting/AI_adjustments/README.md)** — that README is written to stand alone next to the code.
+**Operational detail** (exact CLI commands, install steps, directory tree, per-file APIs, adding tools): **[`adoption_forecaster/AI_adjustments/README.md`](../adoption_forecaster/AI_adjustments/README.md)** — that README is written to stand alone next to the code.
 
 ## Summary
 
@@ -52,23 +52,23 @@ CSV → AI_adjustments/main.py → load_config + Secret Manager (OpenAI key)
 
 ### Modes / modules
 
-- **`education`**: Country-level **secondary / tertiary** projections. **Only `secondary_<year>`** is adjusted by the agent; **`tertiary_<year>`** is derived so **secondary + tertiary = 1** per year. **Column names, sequential-year rules, and tool behavior** are documented under **Module Structure** in the [module README](../quotas_forecasting/AI_adjustments/README.md#module-structure).
+- **`education`**: Country-level **secondary / tertiary** projections. **Only `secondary_<year>`** is adjusted by the agent; **`tertiary_<year>`** is derived so **secondary + tertiary = 1** per year. **Column names, sequential-year rules, and tool behavior** are documented under **Module Structure** in the [module README](../adoption_forecaster/AI_adjustments/README.md#module-structure).
 - **`age_gender`**: Country × individual (age/gender) combinations; projections stay in **[0, 1]**; rules favor **conservative downward** adjustments. **Projection column naming** for this module is in the same README section.
 
 ### CLI (standalone)
 
-Entry point **`python -m quotas_forecasting.AI_adjustments.main`** (not **`quotas_forecasting/main.py`**). Flags: `--module`, `--mode`, `--adjusted-year`; interactive CSV selection; outputs under `output/` including optional **`adjustment_log_*.json`**. **Copy-paste commands and argument reference:** [module README — Usage](../quotas_forecasting/AI_adjustments/README.md#usage).
+Entry point **`python -m adoption_forecaster.AI_adjustments.main`** (not **`adoption_forecaster/main.py`**). Flags: `--module`, `--mode`, `--adjusted-year`; interactive CSV selection; outputs under `output/` including optional **`adjustment_log_*.json`**. **Copy-paste commands and argument reference:** [module README — Usage](../adoption_forecaster/AI_adjustments/README.md#usage).
 
 ### Configuration & secrets
 
-- **`quotas_forecasting/config/config.yaml`**: `defaults.project_id`, **`secrets.openai_api_key`** (Secret Manager secret name).
-- Runtime uses **`get_openai_api_key`** (`gcp_secrets.py`); callers need credentials that can read Secret Manager (e.g. ADC or service account). **Local vs prod notes:** [module README — OpenAI API key](../quotas_forecasting/AI_adjustments/README.md#openai-api-key-local-and-prod).
+- **`adoption_forecaster/config/config.yaml`**: `defaults.project_id`, **`secrets.openai_api_key`** (Secret Manager secret name).
+- Runtime uses **`get_openai_api_key`** (`gcp_secrets.py`); callers need credentials that can read Secret Manager (e.g. ADC or service account). **Local vs prod notes:** [module README — OpenAI API key](../adoption_forecaster/AI_adjustments/README.md#openai-api-key-local-and-prod).
 
 ### Researcher feedback file (RAG)
 
 **`main.py`** loads feedback only from:
 
-`quotas_forecasting/AI_adjustments/input/feedback_{adjusted_year - 1}_{module}.csv`
+`adoption_forecaster/AI_adjustments/input/feedback_{adjusted_year - 1}_{module}.csv`
 
 | `--adjusted-year` | `--module`   | Expected feedback filename      |
 |-------------------|--------------|----------------------------------|
@@ -79,7 +79,7 @@ Implementation: **`get_feedback_csv_path(input_dir, module, adjusted_year)`** in
 
 ### Source layout
 
-Files live under **`quotas_forecasting/AI_adjustments/`**. **Directory tree, roles, and how to add a tool** are maintained in one place: [module README — Architecture and Key Components](../quotas_forecasting/AI_adjustments/README.md#architecture).
+Files live under **`adoption_forecaster/AI_adjustments/`**. **Directory tree, roles, and how to add a tool** are maintained in one place: [module README — Architecture and Key Components](../adoption_forecaster/AI_adjustments/README.md#architecture).
 
 ### Changing behavior safely
 
@@ -91,7 +91,7 @@ Files live under **`quotas_forecasting/AI_adjustments/`**. **Directory tree, rol
 ## Limitations
 
 1. **LLM behavior:** Non-deterministic (unless temperature and sampling are tightly controlled); may misinterpret edge cases; **cost and latency** scale with iterations and data size.
-2. **Not a forecaster:** This module **does not** replace `quotas_forecasting`’s statistical forecasting; it **adjusts supplied CSVs** after the fact.
+2. **Not a forecaster:** This module **does not** replace `adoption_forecaster`’s statistical forecasting; it **adjusts supplied CSVs** after the fact.
 3. **Not wired into default forecasting `main.py`:** The core pipeline does **not** call `AI_adjustments`; operations must run the **separate CLI** (or integrate explicitly if product requires it).
 4. **Dependencies:** OpenAI and pydantic are declared in the main **`pyproject.toml`**; no separate install step is needed.
 5. **RAG quality:** Retrieval depends on feedback CSV coverage, embedding quality, and the **similarity threshold**; no semantic match ⇒ no comment for that lookup (graceful degradation).
@@ -105,7 +105,7 @@ Files live under **`quotas_forecasting/AI_adjustments/`**. **Directory tree, rol
 
 | Doc | Purpose |
 |-----|---------|
-| [AI_adjustments/README.md](../quotas_forecasting/AI_adjustments/README.md) | Install, CLI, directory tree, per-file APIs, module constraints, extending tools |
+| [AI_adjustments/README.md](../adoption_forecaster/AI_adjustments/README.md) | Install, CLI, directory tree, per-file APIs, module constraints, extending tools |
 | [ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md) | Feedback embeddings and retrieval |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Main service architecture (includes optional `AI_adjustments`) |
 | [DESIGN_PATTERNS.md](./DESIGN_PATTERNS.md) | Broader codebase patterns; links back here for the LLM module |

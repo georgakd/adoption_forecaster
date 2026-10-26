@@ -7,17 +7,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.agent import run_correction
-from quotas_forecasting.correction.caps import compute_yoy_caps
-from quotas_forecasting.correction.constraints import check_constraints
-from quotas_forecasting.correction.evaluation import evaluate
-from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient
-from quotas_forecasting.correction.prompts import planner_system_prompt, researcher_system_prompt
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.tools import CorrectionSession
-from quotas_forecasting.synthetic.benchmark import Benchmark, build_benchmark
-from quotas_forecasting.synthetic.sources import SourceDoc
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.agent import run_correction
+from adoption_forecaster.correction.caps import compute_yoy_caps
+from adoption_forecaster.correction.constraints import check_constraints
+from adoption_forecaster.correction.evaluation import evaluate
+from adoption_forecaster.correction.llm import LLMResponse, ScriptedClient
+from adoption_forecaster.correction.prompts import planner_system_prompt, researcher_system_prompt
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.correction.tools import CorrectionSession
+from adoption_forecaster.synthetic.benchmark import Benchmark, build_benchmark
+from adoption_forecaster.synthetic.sources import SourceDoc
 
 LAST_YEAR = 2024
 COUNTRIES = ["Alpha", "Beta", "Gamma", "Delta"]
@@ -179,7 +179,7 @@ def _yoy_flags(bench, caps):
 
 @pytest.fixture(scope="module")
 def real(config):
-    from quotas_forecasting.backtest.eurostat_backtest import DEFAULT_CACHE_DIR, build_real_backtest, cached_input_files, expected_input_files
+    from adoption_forecaster.backtest.eurostat_backtest import DEFAULT_CACHE_DIR, build_real_backtest, cached_input_files, expected_input_files
 
     if os.environ.get("QF_REALDATA") != "1" or set(cached_input_files(DEFAULT_CACHE_DIR, config)) != set(expected_input_files(config)):
         pytest.skip("needs QF_REALDATA=1 and a complete .cache/eurostat")

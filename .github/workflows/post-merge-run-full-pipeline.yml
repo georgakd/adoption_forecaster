@@ -44,7 +44,7 @@ jobs:
       - name: 🧪 Run forecasting for both modules
         run: |
           docker run --rm \
-            -v /home/runner/_work/quotas_forecasting/quotas_forecasting/forecasting-creds.json:/tmp/credentials.json \
+            -v /home/runner/_work/adoption_forecaster/adoption_forecaster/forecasting-creds.json:/tmp/credentials.json \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/credentials.json \
             quotas-forecasting-image \
             --module both --mode prod --pred-year 2026 --last-year 2024

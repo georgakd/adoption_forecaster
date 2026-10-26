@@ -1,6 +1,6 @@
-# Quotas Forecasting Architecture
+# Adoption Forecaster Architecture
 
-This document describes the architecture of the `quotas_forecasting` service, including how components interact and how data flows to the Universe service (Andromeda) via Pub/Sub.
+This document describes the architecture of the `adoption_forecaster` service, including how components interact and how data flows to the Universe service (Andromeda) via Pub/Sub.
 
 ---
 
@@ -79,7 +79,7 @@ Handles the actual forecasting using multiple strategies:
 
 ### 6. Optional: AI projection corrections (`AI_adjustments/`)
 
-Not part of the default forecasting flow above. A **separate CLI** (`python -m quotas_forecasting.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
+Not part of the default forecasting flow above. A **separate CLI** (`python -m adoption_forecaster.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
 
 ---
 
@@ -219,7 +219,7 @@ The `ModellingOutputFile` protobuf message contains:
 | Field               | Type          | Description                           |
 | ------------------- | ------------- | ------------------------------------- |
 | `time`            | Timestamp     | UTC timestamp when event occurred     |
-| `sender`          | string        | Service name (`quotas_forecasting`) |
+| `sender`          | string        | Service name (`adoption_forecaster`) |
 | `file_type`       | FileType enum | Type of output file (see below)       |
 | `gcs_path`        | string        | Full GCS path to the uploaded file    |
 | `projection_year` | int           | Year of the population projection     |
@@ -306,7 +306,7 @@ universe-bucket-staging/
 
 ```
 ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐
-│  Quotas Forecasting  │     │    Secret Manager    │     │   Service Account    │
+│ Adoption Forecaster  │     │    Secret Manager    │     │   Service Account    │
 │       Service        │────▶│                      │────▶│    Credentials       │
 │                      │     │ quotas-forecasting-  │     │                      │
 │                      │     │ sa-key               │     │ Used for:            │
@@ -471,11 +471,11 @@ The service is packaged in a Docker container based on `python:3.11-slim`:
 │  Base: python:3.11-slim                   │
 │                                           │
 │  ├── Poetry (dependency management)       │
-│  ├── quotas_forecasting/ (source code)    │
+│  ├── adoption_forecaster/ (source code)    │
 │  ├── pyproject.toml + poetry.lock         │
 │  │                                        │
 │  └── ENTRYPOINT:                          │
-│      python quotas_forecasting/main.py    │
+│      python adoption_forecaster/main.py    │
 │                                           │
 │  User: appuser (non-root, UID 8002)       │
 └───────────────────────────────────────────┘
@@ -523,7 +523,7 @@ The `--wait` flag ensures the workflow waits for job completion before marking s
 
 ## Summary
 
-The `quotas_forecasting` service:
+The `adoption_forecaster` service:
 
 1. **Deploys** automatically via GitHub Actions → GCR → Cloud Run Job
 2. **Fetches** demographic data from Eurostat (optional)

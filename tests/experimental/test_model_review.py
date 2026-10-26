@@ -13,21 +13,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import quotas_forecasting.forecasting.quotas_forecasting as qf_module
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.data_handlers.missing_data_handlers import MissingDataHandler
-from quotas_forecasting.data_handlers.proxy_handlers import ProxyHandler
-from quotas_forecasting.forecasting.predictors import EducationPredictor
-from quotas_forecasting.forecasting.utils import (
+import adoption_forecaster.forecasting.adoption_forecaster as qf_module
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.data_handlers.missing_data_handlers import MissingDataHandler
+from adoption_forecaster.data_handlers.proxy_handlers import ProxyHandler
+from adoption_forecaster.forecasting.predictors import EducationPredictor
+from adoption_forecaster.forecasting.utils import (
     adjust_100prc_predictions_cases,
     fit_predict_logistic,
     fit_predict_theta,
     predict_random_walk,
     train_lasso,
 )
-from quotas_forecasting.synthetic.benchmark import run_pipeline_on_inputs
-from quotas_forecasting.synthetic.world import generate_world
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.synthetic.benchmark import run_pipeline_on_inputs
+from adoption_forecaster.synthetic.world import generate_world
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 
 YEARS = list(range(2004, 2023))
 

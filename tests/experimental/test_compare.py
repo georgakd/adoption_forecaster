@@ -5,12 +5,12 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from quotas_forecasting.backtest.compare import GAM_ANCHOR, METHODS, WIN_MARGIN, compare_methods, decide, gam_anchor_robustness, method_table
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.constraints import check_constraints
-from quotas_forecasting.correction.evaluation import _mae
-from quotas_forecasting.forecasting.predictors import get_predictor, prediction_method
-from quotas_forecasting.synthetic.benchmark import build_benchmark
+from adoption_forecaster.backtest.compare import GAM_ANCHOR, METHODS, WIN_MARGIN, compare_methods, decide, gam_anchor_robustness, method_table
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.constraints import check_constraints
+from adoption_forecaster.correction.evaluation import _mae
+from adoption_forecaster.forecasting.predictors import get_predictor, prediction_method
+from adoption_forecaster.synthetic.benchmark import build_benchmark
 
 
 @pytest.fixture(scope="module")

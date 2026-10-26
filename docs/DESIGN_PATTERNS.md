@@ -1,6 +1,6 @@
 # SOLID Principles & Design Patterns
 
-This document explains the SOLID principles and design patterns implemented in the `quotas_forecasting` codebase.
+This document explains the SOLID principles and design patterns implemented in the `adoption_forecaster` codebase.
 
 ---
 
@@ -240,7 +240,7 @@ class Loader:
 **Example: Multiple forecasting strategies combined**
 
 ```python
-class Quotas_Forecasting:
+class Adoption_Forecaster:
     def combine_forecasts(self):
         # Multiple prediction strategies combined with weights
         self.merged_all[f"{year}_combined"] = (

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.forecasting.experimental.balancing import (
+from adoption_forecaster.forecasting.experimental.balancing import (
     InfeasibleBalanceError,
     entropy_balance_weights,
     kernel_balance_weights,

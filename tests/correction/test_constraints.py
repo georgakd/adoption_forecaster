@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.correction.constraints import check_constraints
+from adoption_forecaster.correction.constraints import check_constraints
 
 LAST_YEAR = 2024
 MAX_YOY = 0.10

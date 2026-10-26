@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.synthetic.world import generate_world
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.synthetic.world import generate_world
 
 WORLD_SEED = 7
 LAST_YEAR = 2024

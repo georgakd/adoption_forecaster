@@ -22,8 +22,8 @@ def test_modules_import_without_pygam_and_the_gam_raises_a_clear_error():
 import sys
 sys.modules["pygam"] = None  # makes `import pygam` raise ImportError
 import pandas as pd
-import quotas_forecasting.backtest.compare
-from quotas_forecasting.forecasting.experimental.gam import gam_forecast
+import adoption_forecaster.backtest.compare
+from adoption_forecaster.forecasting.experimental.gam import gam_forecast
 try:
     gam_forecast(pd.Series([0.1, 0.2, 0.3, 0.4, 0.5], index=range(2017, 2022)), horizon=2)
 except ImportError as exc:

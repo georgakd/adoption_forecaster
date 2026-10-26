@@ -1,11 +1,11 @@
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.evaluation import evaluate
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.types import TABLE_COLUMNS, Citation, Correction
-from quotas_forecasting.synthetic.benchmark import Benchmark, build_benchmark
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.evaluation import evaluate
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.correction.types import TABLE_COLUMNS, Citation, Correction
+from adoption_forecaster.synthetic.benchmark import Benchmark, build_benchmark
 
 
 @pytest.fixture(scope="module")
@@ -81,7 +81,7 @@ def test_mae_is_per_group_then_averaged_not_pooled(bench, config):
     pred = truth.copy()
     pred["value"] = [0.6, 0.6, 0.6, 0.9]  # group A error 0.1 (3 rows), group B 0.4 (1 row): mean 0.25, pooled 0.175
     b = dataclasses.replace(bench, baseline=truth, truth=truth)
-    from quotas_forecasting.correction.evaluation import _mae
+    from adoption_forecaster.correction.evaluation import _mae
 
     assert _mae(pred, b.truth) == pytest.approx(0.25)
 
@@ -125,8 +125,8 @@ def test_only_introduced_or_worsened_violations_count(config, year, value, intro
 
 def test_wrong_segment_citation_passes_the_gate_but_evaluate_counts_it(config):
     """Probe from the final review: a France 'Female, 35 to 44' document cited for 'Female, 16 to 24' 2025."""
-    from quotas_forecasting.correction.tools import CorrectionSession
-    from quotas_forecasting.synthetic.sources import SourceDoc
+    from adoption_forecaster.correction.tools import CorrectionSession
+    from adoption_forecaster.synthetic.sources import SourceDoc
 
     segments = [("Female, 16 to 24", 0.78), ("Female, 35 to 44", 0.79)]
     rows = [("France", seg, year, value, year > 2024) for seg, value in segments for year in (2024, 2025)]

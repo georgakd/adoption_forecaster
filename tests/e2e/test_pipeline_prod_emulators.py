@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from quotas_forecasting.main import run_single_module
+from adoption_forecaster.main import run_single_module
 from tests.e2e.emulators import assert_uploaded_and_notified
 
 PRED_YEAR = 2026

@@ -4,7 +4,7 @@
 #   export PUBSUB_EMULATOR_HOST=localhost:8685
 #   .venv/bin/python -m pytest -m emulators -v
 #   docker compose -f docker-compose.emulators.yml down -v
-name: quotas-forecasting-emulators
+name: adoption-forecaster-emulators
 
 services:
   gcs:

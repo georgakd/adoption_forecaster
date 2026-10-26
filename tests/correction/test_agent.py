@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.agent import MAX_SUMMARY_ROWS, CorrectionResult, run_correction, summarize_table
-from quotas_forecasting.correction.evaluation import evaluate
-from quotas_forecasting.correction.llm import LLMResponse, LLMUnavailableError, ScriptedClient, ToolCall
-from quotas_forecasting.correction.prompts import planner_system_prompt, researcher_system_prompt
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.synthetic.benchmark import build_benchmark
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.agent import MAX_SUMMARY_ROWS, CorrectionResult, run_correction, summarize_table
+from adoption_forecaster.correction.evaluation import evaluate
+from adoption_forecaster.correction.llm import LLMResponse, LLMUnavailableError, ScriptedClient, ToolCall
+from adoption_forecaster.correction.prompts import planner_system_prompt, researcher_system_prompt
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.synthetic.benchmark import build_benchmark
 from tests.correction.scripting import KEY
 from tests.correction.scripting import call as _call
 from tests.correction.scripting import citation as _citation
@@ -386,7 +386,7 @@ class _NoCountsStore(SyntheticSourceStore):
 def test_source_count_failure_drops_counts_line_and_continues(edu, config, caplog):
     store = _NoCountsStore(edu.docs)
     llm = ScriptedClient([_plan(("France", "secondary")), LLMResponse(text="nothing to change")])
-    with caplog.at_level(logging.WARNING, logger="quotas_forecasting.correction.agent"):
+    with caplog.at_level(logging.WARNING, logger="adoption_forecaster.correction.agent"):
         result = run_correction(edu.baseline, "education", store, llm, config)
 
     assert result.error is None and len(llm.calls) == 2

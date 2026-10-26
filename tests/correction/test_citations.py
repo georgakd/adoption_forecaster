@@ -2,10 +2,10 @@ import dataclasses
 
 import pytest
 
-from quotas_forecasting.correction.citations import citation_supports_correction, verify_citation
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.types import Citation, Correction
-from quotas_forecasting.synthetic.sources import SourceDoc
+from adoption_forecaster.correction.citations import citation_supports_correction, verify_citation
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.correction.types import Citation, Correction
+from adoption_forecaster.synthetic.sources import SourceDoc
 
 TOL = 0.005
 TEXT = "According to the Office, the share of internet users with tertiary education in Spain reached {v} in 2026. For reference, it was {w} in 2023."

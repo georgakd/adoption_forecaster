@@ -2,7 +2,7 @@
 
 Date: 2026-10-22. Scope: the production ensemble (Theta, smoothed random walk, logistic, and the LASSO proxy path) and three
 experimental alternatives: a GAM, entropy balancing and kernel balancing. Every verdict below rests on a test in
-`tests/experimental/test_model_review.py` or on a backtest number produced by `quotas_forecasting/backtest/compare.py`. Nothing here
+`tests/experimental/test_model_review.py` or on a backtest number produced by `adoption_forecaster/backtest/compare.py`. Nothing here
 is asserted from reading the code alone.
 
 **Outcome in one paragraph.** Suspect (a) changes no value. The blend weights in (b) were never justified, but the backtests now
@@ -16,8 +16,8 @@ accepted value, so the goldens are unchanged.
 ## How to reproduce
 
 ```
-python -m quotas_forecasting.backtest.compare --out benchmark_results/model_review.md   # about 26 min, offline, single-threaded BLAS
-python -m quotas_forecasting.backtest.compare --anchor-robustness                      # GAM with both anchor choices only
+python -m adoption_forecaster.backtest.compare --out benchmark_results/model_review.md   # about 26 min, offline, single-threaded BLAS
+python -m adoption_forecaster.backtest.compare --anchor-robustness                      # GAM with both anchor choices only
 python -m pytest tests/experimental -v                                                  # suspect evidence + method tests (about 25 s)
 ```
 
@@ -105,7 +105,7 @@ copied from that command's output. The command also writes per-origin columns, w
 - **Verdict: confirmed dead in production. If enabled, it is broken in both modules.**
 - **Evidence:**
   - *Inactive:* `test_a_and_c_lasso_paths_are_never_called_by_the_default_pipeline` replaces `ProxyHandler.apply_LASSO_...` and
-    `quotas_forecasting.train_lasso` with functions that raise. Both pipelines still complete.
+    `adoption_forecaster.train_lasso` with functions that raise. Both pipelines still complete.
   - *Age_Gender, enabled:* `test_c_age_gender_lasso_path_crashes_when_enabled` (Austria as the target, missing 2023-2024, with
     four proxies) raises `TypeError: 'NoneType' object is not subscriptable`. The cause is that `extend_time_series_for_group`
     calls `backtest_model(lasso, X_train, y_train)` without `config`.
@@ -210,7 +210,7 @@ copied from that command's output. The command also writes per-origin columns, w
 
 ## Experimental methods
 
-All three are in `quotas_forecasting/forecasting/experimental/` and run only through `compare.py`. They see exactly the history the
+All three are in `adoption_forecaster/forecasting/experimental/` and run only through `compare.py`. They see exactly the history the
 pipeline's baseline table holds and forecast the same cells. For Education they forecast the tertiary share only and set secondary
 = 1 - tertiary, so the hard constraints ([0, 1] and S + T = 1) hold by construction (`test_method_tables_keep_history_and_satisfy_hard_constraints`).
 
@@ -295,7 +295,7 @@ Decision (relative MAE reduction against the ensemble; positive is better):
 | age_gender | kernel_proxy | +8.7% | -3.1% | no |
 
 **GAM anchor robustness.** The tuning origin overlaps the reported truth (see Benchmarks), so the GAM was scored with both anchor
-choices on the reporting data (`python -m quotas_forecasting.backtest.compare --anchor-robustness`, 265 s):
+choices on the reporting data (`python -m adoption_forecaster.backtest.compare --anchor-robustness`, 265 s):
 
 | module | benchmark | ensemble MAE | GAM, anchor=False | GAM, anchor=True (configured) | gain, anchor=False | gain, anchor=True | wins (either) |
 |---|---|---|---|---|---|---|---|

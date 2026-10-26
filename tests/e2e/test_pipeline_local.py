@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from quotas_forecasting.main import run_single_module
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.main import run_single_module
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 
 PRED_YEAR = 2026
 LAST_YEAR = 2024

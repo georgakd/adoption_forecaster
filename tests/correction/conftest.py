@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from quotas_forecasting.forecasting import predictors
-from quotas_forecasting.main import run_single_module
-from quotas_forecasting.synthetic.writers import write_age_gender_inputs, write_education_inputs
+from adoption_forecaster.forecasting import predictors
+from adoption_forecaster.main import run_single_module
+from adoption_forecaster.synthetic.writers import write_age_gender_inputs, write_education_inputs
 
 PRED_YEAR = 2026
 LAST_YEAR = 2024

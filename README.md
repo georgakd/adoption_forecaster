@@ -1,13 +1,13 @@
-# Quotas Forecasting
+# Adoption Forecaster
 
 This project provides tools and pipelines for quota-based forecasting of internet usage and demographic trends, supporting both Education and Age_Gender modules. It is designed to run both locally in a poetry environment and in production/cloud environments.
 
 ## Project Structure
 
 ```
-quotas_forecasting/
+adoption_forecaster/
 │
-├── quotas_forecasting/           # Main package directory
+├── adoption_forecaster/           # Main package directory
 │   ├── main.py                   # Entry point for running forecasting modules
 │   │
 │   ├── config/                   # Configuration management
@@ -28,7 +28,7 @@ quotas_forecasting/
 │   ├── forecasting/              # Forecasting logic
 │   │   ├── predictors.py         # Forecasting model definitions and utilities
 │   │   ├── processors.py         # Data processing and pipeline orchestration
-│   │   ├── quotas_forecasting.py # Core forecasting implementation
+│   │   ├── adoption_forecaster.py # Core forecasting implementation
 │   │   └── utils.py              # Forecasting utilities
 │   │
 │   ├── AI_adjustments/           # LLM-based projection correction (post-processing CSVs)
@@ -64,12 +64,12 @@ quotas_forecasting/
 
 ## Main Functionality of Each Folder
 
-- **quotas_forecasting/**: Core package containing all main logic for data loading, processing, forecasting, and output. The `main.py` script is the entry point for running forecasts.
+- **adoption_forecaster/**: Core package containing all main logic for data loading, processing, forecasting, and output. The `main.py` script is the entry point for running forecasts.
   - **config/**: Configuration loading and logging setup.
   - **data_handlers/**: Data loading, validation, file writing, and handling missing data/proxies.
   - **fetch_data/**: Fetching data from external sources (Eurostat).
   - **forecasting/**: Forecasting models, processors, and pipeline orchestration.
-  - **AI_adjustments/**: Optional **post-processing** step that uses an LLM with tool calling to review and adjust forecast CSVs (outliers, domain constraints). **Not** invoked currently by the main `main.py` forecasting CLI; run separately. See [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) and [AI_adjustments/README.md](quotas_forecasting/AI_adjustments/README.md).
+  - **AI_adjustments/**: Optional **post-processing** step that uses an LLM with tool calling to review and adjust forecast CSVs (outliers, domain constraints). **Not** invoked currently by the main `main.py` forecasting CLI; run separately. See [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) and [AI_adjustments/README.md](adoption_forecaster/AI_adjustments/README.md).
   - **services/**: External service integrations (Pub/Sub, protobuf serialization).
   - **testing/**: Output validation tools for local and GA environments.
   - **Age_Gender/** and **Education/**: Module-specific input/output data folders.
@@ -82,11 +82,11 @@ The **AI adjustments** subsystem corrects exported **prediction CSVs** using Ope
 | Topic | Where to read |
 |--------|----------------|
 | Problem, solution, value, features, limitations (technical overview) | [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) |
-| How to run the CLI, layout, components | [quotas_forecasting/AI_adjustments/README.md](quotas_forecasting/AI_adjustments/README.md) |
+| How to run the CLI, layout, components | [adoption_forecaster/AI_adjustments/README.md](adoption_forecaster/AI_adjustments/README.md) |
 | Researcher feedback + embeddings (RAG) | [docs/ARCHITECTURE_RAG.md](docs/ARCHITECTURE_RAG.md) |
 | Autonomous correction agent (cited evidence, deterministic gate, synthetic benchmark runner) | [docs/CORRECTION_AGENT.md](docs/CORRECTION_AGENT.md) |
 
-**Relationship to the main pipeline:** `quotas_forecasting/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from the repository root with `python -m quotas_forecasting.AI_adjustments.main ...` (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.
+**Relationship to the main pipeline:** `adoption_forecaster/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from the repository root with `python -m adoption_forecaster.AI_adjustments.main ...` (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.
 
 **Not the same as** deterministic `age_groups_tweak` in `forecasting/utils.py`, which applies a fixed age-band rule inside the core Age/Gender pipeline.
 
@@ -171,7 +171,7 @@ Run the script with the arguments you use for main. For example:
 
 #### The script
 
-- Builds the Docker image (quotas-forecasting)
+- Builds the Docker image (adoption-forecaster)
 - Fetches the latest service account key from Secret Manager
 - Mounts the key inside the container as a temporary file (No need to manually download or manage credentials)
 - Sets the required GOOGLE_APPLICATION_CREDENTIALS env variable
@@ -239,7 +239,7 @@ For more details on forecasting methodologies and configuration, see the code an
   - `--mode`: `local` or `prod`
   - `--module`: `education`, `age_gender`, or `both`
   - `--pred-year` and `--last-year`: must satisfy the configured year difference
-- **Key config toggles** (in `quotas_forecasting/config/config.yaml`):
+- **Key config toggles** (in `adoption_forecaster/config/config.yaml`):
   - `defaults.auto_fetch`: whether to auto-fetch Eurostat data
   - `pubsub.enable_notifications`: whether to publish Pub/Sub notifications after uploads
 

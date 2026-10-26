@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quotas_forecasting.config.config_loader import load_config
-from quotas_forecasting.correction.constraints import check_constraints
-from quotas_forecasting.correction.sources import SyntheticSourceStore
-from quotas_forecasting.correction.tools import CorrectionSession, Rejection, introduced_violations, tool_schemas
-from quotas_forecasting.synthetic.benchmark import build_benchmark
-from quotas_forecasting.synthetic.sources import SourceDoc, format_value
+from adoption_forecaster.config.config_loader import load_config
+from adoption_forecaster.correction.constraints import check_constraints
+from adoption_forecaster.correction.sources import SyntheticSourceStore
+from adoption_forecaster.correction.tools import CorrectionSession, Rejection, introduced_violations, tool_schemas
+from adoption_forecaster.synthetic.benchmark import build_benchmark
+from adoption_forecaster.synthetic.sources import SourceDoc, format_value
 
 LAST_YEAR = 2024
 SENTENCE = "According to the Office, the share of internet users with secondary education in {country} reached {value} in {year}."
