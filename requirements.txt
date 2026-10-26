@@ -18,3 +18,7 @@ pyyaml>=6.0.2,<7.0
 requests>=2.32.4,<3.0
 protobuf>=4.25.1,<5.0
 python-docx>=1.1.0,<2.0
+
+# LLM agent (correction package; kept in sync with pyproject.toml, which Docker installs from)
+openai>=1.0.0,<4
+pydantic>=2.0.0,<3.0

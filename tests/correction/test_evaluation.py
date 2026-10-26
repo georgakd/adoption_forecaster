@@ -121,3 +121,24 @@ def test_only_introduced_or_worsened_violations_count(config, year, value, intro
     report = evaluate(bench, _with(bench, year, value), [], SyntheticSourceStore([]), config)
     assert report.baseline_violations == 1
     assert (report.violations >= 1) is introduced and (report.violations == 0) is not introduced
+
+
+def test_wrong_segment_citation_passes_the_gate_but_evaluate_counts_it(config):
+    """Probe from the final review: a France 'Female, 35 to 44' document cited for 'Female, 16 to 24' 2025."""
+    from quotas_forecasting.correction.tools import CorrectionSession
+    from quotas_forecasting.synthetic.sources import SourceDoc
+
+    segments = [("Female, 16 to 24", 0.78), ("Female, 35 to 44", 0.79)]
+    rows = [("France", seg, year, value, year > 2024) for seg, value in segments for year in (2024, 2025)]
+    table = pd.DataFrame(rows, columns=TABLE_COLUMNS)
+    quote = "According to the Office, the share of women aged 35 to 44 who use the internet in France reached 79.4% in 2025."
+    doc = SourceDoc("fr-35-44-2025", "Office", "France", 2025, "percent", "Female, 35 to 44", quote, 0.794, title="France 2025")
+    store = SyntheticSourceStore([doc])
+    citation = {"doc_id": doc.doc_id, "quoted_text": quote, "value": 0.794, "year": 2025, "unit": "percent"}
+    session = CorrectionSession(table, "age_gender", store, config)
+    result = session.propose_correction("France", "Female, 16 to 24", 2025, 0.794, citation, 0.9, "published figure")
+    assert result["accepted"] is True  # the gate binds year/value/country only (segment binding deferred to milestone 2)
+    bench = Benchmark("age_gender", None, table, table.copy(), [doc], 2024, 2025)
+    report = evaluate(bench, session.working, session.corrections, store, config)
+    assert report.hallucinated_citations == 1
+

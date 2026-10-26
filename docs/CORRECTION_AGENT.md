@@ -7,7 +7,9 @@ An LLM agent that corrects the statistical baseline forecast using cited evidenc
 1. **Planner**: one call that reads a compact summary of the forecast table (per country-segment: recent history, forecast, deviation from trend, number of source documents per country) and returns a JSON list of suspicious country-segments.
 2. **Researcher**: for each suspect, a bounded tool-calling loop (`search_sources`, `read_source`, `propose_correction`). A proposal carries the new value, a verbatim quote from a document, the value and year the quote states, a confidence and a reason.
 
-Every proposal passes a **deterministic gate** before it touches the table: the cited quote must really occur in the document, the quoted value must match the proposed value within `citation_tolerance`, and the corrected table must satisfy the hard constraints (bounds, shares summing to one, historical values untouched, year-over-year change within the country-segment's cap (see `yoy_cap`), no worsening of an existing violation). Rejections are fed back to the model as the tool result. The model can never write a value the gate has not accepted.
+Every proposal passes a **deterministic gate** before it touches the table: the cited quote must really occur in the document, the quoted value must match the proposed value within `citation_tolerance` and be stated for the proposed year, the document must name the country somewhere in its text, and the corrected table must satisfy the hard constraints (bounds, shares summing to one, historical values untouched, year-over-year change within the country-segment's cap (see `yoy_cap`), no worsening of an existing violation). Rejections are fed back to the model as the tool result. The model can never write a value the gate has not accepted.
+
+**Gate limitation (deferred to milestone 2).** The citation check binds year, value and country only. The country check is a substring search over the whole document (so "Niger" matches "Nigeria", and a document that mentions the country anywhere passes), and the segment is not checked at all: a quote about France, women aged 35 to 44, 79.4% in 2025 is accepted as evidence for France, women aged 16 to 24, 2025. `evaluate` counts such citations independently (see `hallucinated_citations` below), but the gate itself does not stop them.
 
 The agent never raises on LLM failure or malformed output: it returns the best table so far with an `error` string.
 
@@ -26,9 +28,9 @@ Code: `quotas_forecasting/correction/` (`agent.py` loop, `tools.py` gate and too
 |---|---|
 | `enabled` | Master switch for the pipeline hook. Off by default; with it off nothing is built or called. |
 | `max_yoy_change` | Scalar cap on the year-over-year change of a corrected value (share scale, `0.10`): used for every country-segment in `yoy_cap.mode: fixed`, and as the fallback for a segment with no usable history in `adaptive` mode. |
-| `yoy_cap` | `{mode: "adaptive", quantile: 0.9, k: 3.0, floor: 0.03, ceiling: 0.30}`. Per country-segment cap computed once from the baseline's historical cells (see "Adaptive year-over-year cap" below); `mode: fixed` keeps the scalar. |
+| `yoy_cap` | `{mode: "adaptive", quantile: 0.9, k: 3.0, floor: 0.03, ceiling: 0.30}`. Per country-segment cap computed once from the baseline's historical cells (see "Adaptive year-over-year cap" below); `mode: fixed` keeps the scalar. Validated at startup (`prepare_correction`) and whenever caps are computed: `mode` must be `adaptive` or `fixed`, `0 <= quantile <= 1`, `k > 0`, `0 <= floor <= ceiling`; anything else raises `ValueError`. |
 | `citation_tolerance` | Maximum absolute difference between the proposed value and the value stated in the quote. |
-| `model` | NVIDIA model id (OpenAI-compatible endpoint at build.nvidia.com). `null` until chosen. |
+| `model` | NVIDIA model id (OpenAI-compatible endpoint at build.nvidia.com). Set to `nvidia/nemotron-3-ultra-550b-a55b`, the model verified working for the key used; `--model` overrides it in memory. |
 | `max_iterations_per_segment` | Tool-calling turns the researcher may use per country-segment. |
 | `max_llm_retries` | Retries for transient LLM errors and for unparseable planner replies. |
 | `max_suspects` | Planner suspects beyond this many are logged as ignored, not researched. |
@@ -41,7 +43,8 @@ The API key is read from the `NVIDIA_API_KEY` environment variable only. It is n
 The benchmark builds a seeded synthetic world, runs the real forecasting pipeline on the data visible up to the last year to get the baseline, and generates source documents (some wrong, some conflicting) about the truth, which contains shocks the baseline misses.
 
 ```bash
-# Stub mode (default): an oracle script stands in for a perfect model. No network, no key. This is the CI gate.
+# Stub mode (default): an oracle script stands in for a perfect model. No network, no key. This is a local gate: no CI workflow
+# runs it (.github/workflows only build the Docker image, compare pipeline outputs and deploy).
 python -m quotas_forecasting.correction.benchmark_cli --module education --seeds 0-4
 python -m quotas_forecasting.correction.benchmark_cli --module age_gender --seeds 0-2 --n-countries 5
 
@@ -59,18 +62,20 @@ Exit codes: stub mode returns 0 only if the gate passes, 1 otherwise. Live mode 
 
 ## Reading the results
 
-Each run writes `benchmark_results/<UTC timestamp>.json` with `config` (mode, module, model, n_countries, seeds), `per_seed` (the fields below plus `seed` and `error`), `aggregate`, `gate_passed`, `llm_calls` (live only) and `elapsed_seconds`.
+Each run writes `benchmark_results/<UTC timestamp>.json` with `config` (mode, module, model, n_countries, seeds), `per_seed` (the fields below plus `seed`, `error` and `corrections`), `aggregate`, `gate_passed`, `llm_calls` (live only) and `elapsed_seconds`. `corrections` lists every accepted correction of that seed: `module`, `country`, `segment`, `year`, `old_value`, `new_value`, `doc_id`, `quote` (cut to 200 characters) and `confidence`. In the pipeline, `maybe_correct` logs one INFO line per accepted correction with the same fields.
 
 - `mae_before` / `mae_after`: mean absolute error against the truth over forecast years, computed per country-segment and then averaged over country-segments. The headline metric. The aggregate is the mean over seeds; `relative_mae_change = (after - before) / before` (negative is better).
-- `hallucinated_citations`: accepted corrections whose citation does not verify against the source store (quote absent from the document, or value mismatch). Summed over seeds.
+- `hallucinated_citations`: accepted corrections whose citation either fails the gate's own check (quote absent from the document, value or year mismatch, country not named), or, checked independently of the gate, cites a document that is not one of the benchmark's documents or whose own `country`, `segment` and `year` metadata (benchmark ground truth, never shown to the agent) differ from the corrected cell. Only this second part can be non-zero for corrections the gate accepted, for example a quote about another age group of the same country and year. Summed over seeds.
 - `violations`: hard-constraint violations the corrections introduced or worsened relative to the baseline (the same rule `propose_correction` enforces). Summed over seeds.
 - `baseline_violations`: violations already present in the baseline forecast, reported separately and not counted against the agent (console column `base_viol`). Summed over seeds.
 - `n_corrections`: accepted corrections. `error`: the agent's failure message for that seed, if any.
 
 ## Hard gate versus reported target
 
-- **Stub model (CI):** hard gate. Aggregate `mae_after < mae_before`, zero hallucinated citations and zero introduced or worsened violations; the CLI exits non-zero otherwise. The stub oracle proposes the cited value of a document that agrees with the truth, so a failure means the plumbing or the gate is broken.
-- **Live model:** reported target. The same numbers are reported, but a miss does not fail the run: it measures the model, not the code.
+- **Stub model (local, not run by CI):** hard gate. Aggregate `mae_after < mae_before`, zero hallucinated citations and zero introduced or worsened violations; the CLI exits non-zero otherwise. The stub oracle proposes the cited value of a document that agrees with the truth, so a failure means the plumbing or the gate is broken.
+- **Live model:** reported target. The same numbers are reported, but a miss does not fail the run.
+
+What measures the model: `violations` and the gate part of `hallucinated_citations` are the gate's own checks re-run on what the gate already accepted, so they are zero by construction for any model, good or bad. Only the MAE change, the number of corrections and the independent metadata part of `hallucinated_citations` (a citation for the wrong country, segment or year) say anything about the model.
 
 ## Using it in the real pipeline (milestone 2)
 
@@ -121,14 +126,9 @@ QF_REALDATA=1 .venv/bin/python -m pytest -m realdata -v
 docker compose -f docker-compose.emulators.yml down -v
 ```
 
-**Stub results on the 2026-10-22 cache** (cut 2022, predict 2024, seeds 0-1):
+**Stub results on the 2026-10-22 cache:** an earlier table here (seeds 0-1, fixed 0.10 cap) is superseded by "Stub benchmark, fixed versus adaptive" below.
 
-| Module | mae_before | mae_after (oracle) | violations (introduced) | baseline_violations | Gate |
-|---|---|---|---|---|---|
-| education | 0.0107 | 0.0085 (-20.6%) | 0 | 0 | passed |
-| age_gender | 0.0178 | 0.0153 (-13.8%) | 0 | 2 per seed | passed |
-
-The age_gender baseline violations come from the real pipeline itself: its 2023 forecast for Ireland, ages 65-74 (both genders), is +0.147 and +0.178 above the last observed year, more than the fixed 0.10 cap (this table predates the adaptive cap; under the adaptive default these two moves are within their caps, see below). `violations` counts only what the agent introduces or worsens, so these show up in `baseline_violations` and do not fail the gate.
+Under the fixed 0.10 cap the age_gender baseline had 2 violations per seed, from the real pipeline itself: its 2023 forecast for Ireland, ages 65-74 (both genders), is +0.147 and +0.178 above the last observed year, more than the fixed 0.10 cap (this table predates the adaptive cap; under the adaptive default these two moves are within their caps, see below). `violations` counts only what the agent introduces or worsens, so these show up in `baseline_violations` and do not fail the gate.
 
 The published Eurostat age_gender data breaks the 0.10 year-over-year cap too. Using the published truth as the 2023-2024 forecast gives 15 `yoy_cap` violations on this cache (for example, Irish men aged 65-74 went from 62.73% in 2022 to 92.16% in 2023). The fixed cap is therefore stricter than reality and can block corrections toward the truth.
 
@@ -168,6 +168,8 @@ Real age_gender `baseline_violations` (cut 2022) fall from 6 (2 per seed) to 0. 
 
 ### Run 1 — education, synthetic benchmark (2026-10-22)
 
+**Not a measurement of today's default.** This run was made under the fixed 0.10 cap, before `yoy_cap.mode: adaptive` became the default. Under the adaptive cap the oracle stub's gain on the same synthetic Education benchmark falls from -48.1% to -5.4% (see "Stub benchmark, fixed versus adaptive"), so this live result would very likely be smaller today. It has not been rerun.
+
 Command: `benchmark_cli --module education --seeds 0-2 --n-countries 5 --live --model nvidia/nemotron-3-ultra-550b-a55b`
 
 | seed | MAE before | MAE after | hallucinated citations | violations | corrections |
@@ -183,3 +185,17 @@ How to read this: it is a very small sample (3 seeds x 5 countries, 2 correction
 to end against a real model and that the gate held, not that the agent reliably improves forecasts. Seed 1 made no
 correction. The first attempt with `nvidia/nemotron-3-super-120b-a12b` returned HTTP 404 (model not available to
 the API key used), so that model was not evaluated. The endpoint also returned intermittent HTTP 500s that succeeded on retry.
+
+## Before enabling `correction.enabled`
+
+Open items, none of them done yet. The flag also cannot be enabled from the real CLI until a milestone-2 source store exists (`NoSourceStoreError`).
+
+- **Gate-level segment and country binding.** The gate does not check the segment, and its country check is a substring search over the whole document (see "Gate limitation"). Bind both to the cited document's own metadata in the gate, not only in `evaluate`.
+- **Verifier: comma-clause pairing and quote-level country check.** `citations.py` splits clauses only on sentence ends and `;`, so "in 2025 it was 60%, in 2026 it was 62%" can mis-pair numbers and years; the country must appear in the quote, not just somewhere in the document.
+- **Education age-range blindness.** `processors.py:117` calls `maybe_correct` once per age group passing only `"education"`, so the agent and the gate cannot tell 16-64 from 16-74: the 16-74 frame gets corrections nobody evaluated, at twice the LLM cost. Only 16-64 is benchmarked.
+- **LLM call budget.** The OpenAI SDK's default retries (2) stack on the client's own retries (`max_llm_retries`, 3), the SDK default timeout applies, and there is no overall call or time budget per run. Set `max_retries=0` and an explicit `timeout` on the SDK client, and add a run budget.
+- **Untrusted document text.** No rule in `prompts.py` tells the model that document text is untrusted data and that instructions inside it must be ignored.
+- **Dedicated script-exhaustion error.** `agent.py:211-214` and `pipeline.py` re-raise every `AssertionError` (meant for a too-short test script); replace this with a dedicated `ScriptExhausted` exception so a real assertion cannot crash the pipeline.
+- **Corrections artifact.** Write the accepted corrections (today only logged at INFO) to a file next to the pipeline outputs.
+- **CI job.** Add a workflow running `pytest -m "not emulators and not realdata"` plus the stub benchmark; today neither runs in CI.
+- **Live runs under the adaptive cap.** Run one live held-out seed and one live age_gender run under the adaptive default; the only recorded live run used the fixed cap.

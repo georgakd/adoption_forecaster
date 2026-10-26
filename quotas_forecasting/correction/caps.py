@@ -24,13 +24,28 @@ def _historical_changes(baseline: ForecastTable) -> dict[tuple[str, str], np.nda
     return changes
 
 
+def validate_yoy_cap_settings(settings: dict) -> None:
+    """Raise ValueError with a clear message unless the ``correction.yoy_cap`` block is usable."""
+    mode = settings.get("mode")
+    if mode not in ("adaptive", "fixed"):
+        raise ValueError(f"Invalid correction.yoy_cap.mode: {mode!r}. Must be 'adaptive' or 'fixed'")
+    if mode == "fixed":
+        return
+    quantile, k, floor, ceiling = (settings.get(name) for name in ("quantile", "k", "floor", "ceiling"))
+    if not (isinstance(quantile, (int, float)) and 0 <= quantile <= 1):
+        raise ValueError(f"Invalid correction.yoy_cap.quantile: {quantile!r}. Must be in [0, 1]")
+    if not (isinstance(k, (int, float)) and k > 0):
+        raise ValueError(f"Invalid correction.yoy_cap.k: {k!r}. Must be > 0")
+    if not (isinstance(floor, (int, float)) and isinstance(ceiling, (int, float)) and 0 <= floor <= ceiling):
+        raise ValueError(f"Invalid correction.yoy_cap.floor/ceiling: {floor!r}/{ceiling!r}. Must satisfy 0 <= floor <= ceiling")
+
+
 def compute_yoy_caps(baseline: ForecastTable, settings: dict, fallback: float) -> dict[tuple[str, str], float]:
     """The yoy cap for every (country, segment) of ``baseline``; ``settings`` is the ``correction.yoy_cap`` config block."""
     keys = sorted({(str(c), str(s)) for c, s in zip(baseline["country"], baseline["segment"])})
+    validate_yoy_cap_settings(settings)
     if settings["mode"] == "fixed":
         return {key: fallback for key in keys}
-    if settings["mode"] != "adaptive":
-        raise ValueError(f"Unknown correction.yoy_cap.mode: {settings['mode']!r}. Must be 'adaptive' or 'fixed'")
     changes = _historical_changes(baseline)
     caps = {}
     for country, segment in keys:

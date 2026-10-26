@@ -5,8 +5,10 @@ mentions distractor numbers taken from historical years (same segment, other seg
 documents that contradict each other, and some countries get no documents at all.
 
 ``SourceDoc.value`` (and the ground-truth ``segment``) are for tests and the evaluator only; the agent sees snippets and ``text``.
-Seeds >= ``HELDOUT_SEED_START`` draw publishers and phrasing from a disjoint style pool, so held-out evaluation cannot be passed by
-memorising dev-set patterns.
+Seeds >= ``HELDOUT_SEED_START`` draw publishers and phrasing from a disjoint style pool, so held-out evaluation guards only against
+memorising dev-set publisher names and sentence templates. Everything else is identical to dev: the noise clip, the wrong-value offset
+range, the unit mix, the no-document fraction and the distractor structure (which numbers appear as distractors). Held-out evaluation
+therefore does NOT protect against tuning on those parameters.
 """
 
 import re

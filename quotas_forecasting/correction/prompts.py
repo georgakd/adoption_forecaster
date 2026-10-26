@@ -1,8 +1,9 @@
-"""System prompts for the correction agent: one model, two roles (planner, researcher). Config values are passed in, never hard-coded."""
+"""System prompts for the correction agent: one model, two roles (planner, researcher). No limit is hard-coded here: the turn budget is
+passed in, and each country-segment's yoy cap is stated in the planner summary and the researcher's segment brief, not in these prompts."""
 
 
 def _rules() -> str:
-    return f"""Hard constraints (a deterministic verifier enforces them and rejects any proposal that breaks one):
+    return """Hard constraints (a deterministic verifier enforces them and rejects any proposal that breaks one):
 - Every value is a share in [0, 1].
 - Education module: secondary + tertiary = 1. Tertiary is derived automatically as 1 - secondary; never propose tertiary.
 - Historical values (years up to the last observed year) are never edited.

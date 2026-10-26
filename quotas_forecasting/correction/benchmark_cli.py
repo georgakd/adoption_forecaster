@@ -24,6 +24,7 @@ from quotas_forecasting.correction.evaluation import evaluate
 from quotas_forecasting.correction.llm import LLMClient, LLMResponse, MissingApiKeyError, get_llm_client
 from quotas_forecasting.correction.oracle import build_oracle_client
 from quotas_forecasting.correction.sources import SyntheticSourceStore
+from quotas_forecasting.correction.types import correction_record
 from quotas_forecasting.synthetic.benchmark import HELDOUT_SEEDS, build_benchmark
 
 DEFAULT_SEEDS = "0-2"
@@ -55,7 +56,7 @@ class CountingClient:
 
 
 def _aggregate(per_seed: list[dict]) -> dict:
-    mean = lambda key: sum(r[key] for r in per_seed) / len(per_seed)  # noqa: E731
+    mean = lambda key: sum(r[key] for r in per_seed) / len(per_seed)
     before, after = mean("mae_before"), mean("mae_after")
     return {
         "mae_before": before,
@@ -135,7 +136,8 @@ def main(argv: list[str] | None = None) -> int:
         llm = counter if counter else build_oracle_client(bench, store, config["correction"]["max_suspects"])
         result = run_correction(bench.baseline, args.module, store, llm, config)
         report = evaluate(bench, result.corrected, result.corrections, store, config)
-        per_seed.append({"seed": seed, **asdict(report), "error": result.error})
+        corrections = [correction_record(c, args.module) for c in result.corrections]
+        per_seed.append({"seed": seed, **asdict(report), "error": result.error, "corrections": corrections})
     elapsed = round(time.monotonic() - started, 1)
 
     agg = _aggregate(per_seed)

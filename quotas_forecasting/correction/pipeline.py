@@ -11,8 +11,10 @@ import pandas as pd
 from quotas_forecasting.config.logging_config import get_logger
 from quotas_forecasting.correction.adapters import from_table, to_table
 from quotas_forecasting.correction.agent import run_correction
+from quotas_forecasting.correction.caps import validate_yoy_cap_settings
 from quotas_forecasting.correction.llm import LLMClient, get_llm_client
 from quotas_forecasting.correction.sources import SourceStore
+from quotas_forecasting.correction.types import correction_record
 
 logger = get_logger(__name__)
 
@@ -33,6 +35,7 @@ def prepare_correction(config: dict, store: SourceStore | None, llm: LLMClient |
     """At startup: with the flag on, build whatever was not injected (the LLM client first, so a missing key is reported first)."""
     if not correction_enabled(config):
         return store, llm
+    validate_yoy_cap_settings(config["correction"]["yoy_cap"])
     if llm is None:
         llm = get_llm_client(config)
     if store is None:
@@ -55,6 +58,12 @@ def maybe_correct(df: pd.DataFrame, module: str, last_year: int, config: dict, s
         logger.error(f"Correction agent failed for {module} ({type(exc).__name__}); keeping the baseline")
         return df
     logger.info(f"Correction {module}: accepted={len(result.corrections)}, rejected={len(result.rejections)}, error={result.error}")
+    for correction in result.corrections:
+        r = correction_record(correction, module)
+        logger.info(
+            f"Accepted correction {module} {r['country']}/{r['segment']}/{r['year']}: {r['old_value']:.4f} -> {r['new_value']:.4f}, "
+            f"doc_id={r['doc_id']}, confidence={r['confidence']}, quote={r['quote']!r}"
+        )
     if result.error:
         kept = len(result.corrections)
         logger.error(f"Correction agent failed for {module}: {result.error}; keeping the baseline plus {kept} accepted correction(s)")

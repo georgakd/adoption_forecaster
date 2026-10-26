@@ -31,15 +31,16 @@ protobuf = "^4.25.1"
 python-docx = "^1.1.0"
 
 # LLM agent (used from Task 8)
-openai = "^1.0.0"
+openai = ">=1.0.0,<4"
 pydantic = "^2.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.2.0"  # Only needed during development
-pytest = "^8.0.0"
+pytest = ">=8,<10"
 
-# Experimental forecasters and their comparison (docs/MODEL_REVIEW.md); never installed by `poetry install --only=main` (Docker).
+# Experimental forecasters and their comparison (docs/MODEL_REVIEW.md); not installed by `poetry install --only=main` (Docker), but
+# Poetry resolves optional groups together with main into one lock, so pygam's scipy < 1.17 cap still binds the production scipy.
 # Install with: poetry install --with experiments
 [tool.poetry.group.experiments]
 optional = true

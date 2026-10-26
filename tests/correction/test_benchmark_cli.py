@@ -42,6 +42,15 @@ def test_stub_mode_gate_passes_with_oracle_script(tmp_path, capsys):
     assert "mae_before" in out and "base_viol" in out
 
 
+def test_accepted_corrections_are_persisted_per_seed(tmp_path):
+    benchmark_cli.main([*ARGS, "--out", str(tmp_path)])
+    seed = _results(tmp_path)["per_seed"][0]
+    assert seed["n_corrections"] > 0 and len(seed["corrections"]) == seed["n_corrections"]
+    for record in seed["corrections"]:
+        assert set(record) == {"module", "country", "segment", "year", "old_value", "new_value", "doc_id", "quote", "confidence"}
+        assert record["module"] == "education" and record["old_value"] != record["new_value"] and len(record["quote"]) <= 200
+
+
 def test_stub_mode_gate_fails_when_script_hallucinates(tmp_path, monkeypatch):
     monkeypatch.setattr(benchmark_cli, "build_oracle_client", functools.partial(build_oracle_client, fabricate=True))
     assert benchmark_cli.main([*ARGS, "--out", str(tmp_path)]) != 0
