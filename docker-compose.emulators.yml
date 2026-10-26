@@ -1,0 +1,20 @@
+# Local GCS + Pub/Sub emulators for tests/e2e/test_pipeline_prod_emulators.py
+#   docker compose -f docker-compose.emulators.yml up -d
+#   export STORAGE_EMULATOR_HOST=http://localhost:4553
+#   export PUBSUB_EMULATOR_HOST=localhost:8685
+#   .venv/bin/python -m pytest -m emulators -v
+#   docker compose -f docker-compose.emulators.yml down -v
+name: adoption-forecaster-emulators
+
+services:
+  gcs:
+    image: fsouza/fake-gcs-server:1.52
+    command: ["-scheme", "http", "-port", "4553", "-external-url", "http://localhost:4553", "-backend", "memory"]
+    ports:
+      - "4553:4553"
+
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:587.0.0-emulators
+    command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8685"]
+    ports:
+      - "8685:8685"

@@ -24,8 +24,8 @@ jobs:
 
       - name: 🐳 Build Docker image
         run: |
-          docker build -t quotas-forecasting-image .
+          docker build -t adoption-forecaster-image .
       
       - name: Run --help to verify CLI startup
         run: |
-          docker run quotas-forecasting-image --help
+          docker run adoption-forecaster-image --help

@@ -1,6 +1,6 @@
-# Quotas Forecasting Architecture
+# Adoption Forecaster Architecture
 
-This document describes the architecture of the `quotas_forecasting` service, including how components interact and how data flows to the Universe service (Andromeda) via Pub/Sub.
+This document describes the architecture of the `adoption_forecaster` service, including how components interact and how data flows to the Universe service (Andromeda) via Pub/Sub.
 
 ---
 
@@ -79,7 +79,7 @@ Handles the actual forecasting using multiple strategies:
 
 ### 6. Optional: AI projection corrections (`AI_adjustments/`)
 
-Not part of the default forecasting flow above. A **separate CLI** (`quotas_forecasting/AI_adjustments/main.py`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
+Not part of the default forecasting flow above. A **separate CLI** (`python -m adoption_forecaster.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](../adoption_forecaster/AI_adjustments/docs/ARCHITECTURE_RAG.md)**.
 
 ---
 
@@ -135,8 +135,8 @@ Not part of the default forecasting flow above. A **separate CLI** (`quotas_fore
         │  Internal GCS   │                     │  External GCS   │                      │ MessageSerializer│
         │   Bucket (ML)   │                     │   (Andromeda)   │                      │                  │
         │                 │                     │                 │                      │   Protobuf +     │
-        │  ml-quotas-     │                     │ universe-bucket │                      │     Pub/Sub      │
-        │  forecasting    │                     │ -staging        │                      │                  │
+        │  adoption-      │                     │ universe-bucket │                      │     Pub/Sub      │
+        │  forecaster-data│                     │ -staging        │                      │                  │
         └─────────────────┘                     └─────────────────┘                      └────────┬─────────┘
                                                                                                   │
                                                                                                   ▼
@@ -219,7 +219,7 @@ The `ModellingOutputFile` protobuf message contains:
 | Field               | Type          | Description                           |
 | ------------------- | ------------- | ------------------------------------- |
 | `time`            | Timestamp     | UTC timestamp when event occurred     |
-| `sender`          | string        | Service name (`quotas_forecasting`) |
+| `sender`          | string        | Service name (`adoption_forecaster`) |
 | `file_type`       | FileType enum | Type of output file (see below)       |
 | `gcs_path`        | string        | Full GCS path to the uploaded file    |
 | `projection_year` | int           | Year of the population projection     |
@@ -242,7 +242,7 @@ The service behavior is controlled by `config.yaml`:
 pubsub:
   enable_notifications: true  # Set to true to send notifications
   topic_name: "population-modelling-files-notifications"
-  service_account: "quotas-forecasting@ml-cloud-374512.iam.gserviceaccount.com"
+  service_account: "adoption-forecaster@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com"
   sub_project_id: "464955218160"  # Andromeda's project ID
 
 # External bucket configuration (Andromeda)
@@ -268,10 +268,10 @@ Notifications are sent only when ALL of these conditions are met:
 
 ## GCS Bucket Structure
 
-### Internal Bucket (`ml-quotas-forecasting`)
+### Internal Bucket (`adoption-forecaster-data`)
 
 ```
-ml-quotas-forecasting/
+adoption-forecaster-data/
 ├── Eurostat/
 │   ├── Education/
 │   │   ├── input/
@@ -306,9 +306,9 @@ universe-bucket-staging/
 
 ```
 ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐
-│  Quotas Forecasting  │     │    Secret Manager    │     │   Service Account    │
+│ Adoption Forecaster  │     │    Secret Manager    │     │   Service Account    │
 │       Service        │────▶│                      │────▶│    Credentials       │
-│                      │     │ quotas-forecasting-  │     │                      │
+│                      │     │ adoption-forecaster- │     │                      │
 │                      │     │ sa-key               │     │ Used for:            │
 │                      │     │                      │     │ - GCS access         │
 │                      │     │                      │     │ - Pub/Sub publishing │
@@ -423,10 +423,10 @@ The service is containerized and deployed to Google Cloud Run as a **Cloud Run J
                             ┌─────────────────────────┐   ┌─────────────────────────┐
                             │    Google Container     │   │     Cloud Run Job       │
                             │    Registry (GCR)       │   │                         │
-                            │                         │   │ quotas-forecasting-run  │
-                            │ eu.gcr.io/ml-cloud-     │   │                         │
-                            │ 374512/quotas-          │──▶│ Runs forecasting        │
-                            │ forecasting-image       │   │ pipeline in container   │
+                            │                         │   │ adoption-forecaster-run │
+                            │ eu.gcr.io/<project>/    │   │                         │
+                            │ adoption-forecaster-    │──▶│ Runs forecasting        │
+                            │ image                   │   │ pipeline in container   │
                             └─────────────────────────┘   └─────────────────────────┘
 ```
 
@@ -471,11 +471,11 @@ The service is packaged in a Docker container based on `python:3.11-slim`:
 │  Base: python:3.11-slim                   │
 │                                           │
 │  ├── Poetry (dependency management)       │
-│  ├── quotas_forecasting/ (source code)    │
+│  ├── adoption_forecaster/ (source code)    │
 │  ├── pyproject.toml + poetry.lock         │
 │  │                                        │
 │  └── ENTRYPOINT:                          │
-│      python quotas_forecasting/main.py    │
+│      python adoption_forecaster/main.py    │
 │                                           │
 │  User: appuser (non-root, UID 8002)       │
 └───────────────────────────────────────────┘
@@ -485,27 +485,27 @@ The service is packaged in a Docker container based on `python:3.11-slim`:
 
 | Variable                 | Value                     | Purpose                   |
 | ------------------------ | ------------------------- | ------------------------- |
-| `GOOGLE_CLOUD_PROJECT` | `ml-cloud-374512`       | GCP project ID            |
-| `GCS_BUCKET_NAME`      | `ml-quotas-forecasting` | Internal storage bucket   |
+| `GOOGLE_CLOUD_PROJECT` | `YOUR_GCP_PROJECT_ID`       | GCP project ID            |
+| `GCS_BUCKET_NAME`      | `adoption-forecaster-data` | Internal storage bucket   |
 | `PYTHONPATH`           | `/app`                  | Python package resolution |
 
 ### Cloud Run Job Configuration
 
 | Setting  | Value                                                         |
 | -------- | ------------------------------------------------------------- |
-| Job Name | `quotas-forecasting-run`                                    |
+| Job Name | `adoption-forecaster-run`                                    |
 | Region   | `europe-west1`                                              |
-| Project  | `ml-cloud-374512`                                           |
-| Image    | `eu.gcr.io/ml-cloud-374512/quotas-forecasting-image:latest` |
+| Project  | `YOUR_GCP_PROJECT_ID`                                           |
+| Image    | `eu.gcr.io/YOUR_GCP_PROJECT_ID/adoption-forecaster-image:latest` |
 
 ### Triggering the Job
 
 The Cloud Run Job is triggered automatically after code is merged to `main`:
 
 ```bash
-gcloud run jobs execute quotas-forecasting-run \
+gcloud run jobs execute adoption-forecaster-run \
   --region=europe-west1 \
-  --project=ml-cloud-374512 \
+  --project=YOUR_GCP_PROJECT_ID \
   --wait
 ```
 
@@ -517,13 +517,13 @@ The `--wait` flag ensures the workflow waits for job completion before marking s
 | ----------------------------- | -------------- | -------------------------------------------- |
 | `SA_ML_CLOUD`               | GitHub Secret  | Authenticate to GCP for Cloud Run execution  |
 | `SA_GWI_HOST_NET`           | GitHub Secret  | Authenticate for pipeline testing & GCR push |
-| `quotas-forecasting-sa-key` | Secret Manager | Runtime credentials for GCS and Pub/Sub      |
+| `adoption-forecaster-sa-key` | Secret Manager | Runtime credentials for GCS and Pub/Sub      |
 
 ---
 
 ## Summary
 
-The `quotas_forecasting` service:
+The `adoption_forecaster` service:
 
 1. **Deploys** automatically via GitHub Actions → GCR → Cloud Run Job
 2. **Fetches** demographic data from Eurostat (optional)
@@ -532,6 +532,6 @@ The `quotas_forecasting` service:
 5. **Stores** results to both internal (ML) and external (Andromeda) GCS buckets
 6. **Notifies** Universe service via Pub/Sub with protobuf messages
 
-Optional **AI projection corrections** (`AI_adjustments/`) are documented in **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and are **not** invoked by the main service entry point by default.
+Optional **AI projection corrections** (`AI_adjustments/`) are documented in **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** and are **not** invoked by the main service entry point by default.
 
 The CI/CD pipeline ensures that every merge to `main` triggers a full test run, pushes an updated Docker image to GCR, and executes the Cloud Run Job. The Pub/Sub integration enables Andromeda to automatically consume new projection files without polling, creating an event-driven data pipeline between the ML team and the Universe service.

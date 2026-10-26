@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  GCP_PROJECT_ID: ml-cloud-374512
+  GCP_PROJECT_ID: YOUR_GCP_PROJECT_ID
   GCP_REGION: europe-west1
-  CLOUD_RUN_JOB: quotas-forecasting-run
+  CLOUD_RUN_JOB: adoption-forecaster-run
 
 jobs:
   run-job:
@@ -30,7 +30,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.SA_ML_CLOUD }}
-          project_id: 'ml-cloud-374512'
+          project_id: 'YOUR_GCP_PROJECT_ID'
       - name: 📥 Checkout code
         uses: actions/checkout@v3
 
@@ -38,7 +38,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.SA_ML_CLOUD }}
-          project_id: 'ml-cloud-374512'
+          project_id: 'YOUR_GCP_PROJECT_ID'
 
       - name: Trigger Cloud Run Job
         run: |

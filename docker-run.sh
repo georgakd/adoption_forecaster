@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================
-# Docker run script for quotas_forecasting
+# Docker run script for adoption_forecaster
 # This script:
 # - Builds the Docker image
 # - Retrieves service account key from Secret Manager
@@ -11,13 +11,13 @@
 # Define paths and secret name
 TMP_KEY_PATH="/tmp/forecasting-creds.json"         # Where the service account key will be stored temporarily
 MOUNT_PATH="/tmp/credentials.json"                 # Path the key will be mounted inside the container
-SECRET_NAME="quotas-forecasting-sa-key"            # Name of the secret in Google Secret Manager
+SECRET_NAME="adoption-forecaster-sa-key"            # Name of the secret in Google Secret Manager
 
 # ----------------------------
 # Step 1: Build the Docker image
 # ----------------------------
 echo "🛠️  Building Docker image..."
-docker build -t quotas-forecasting .
+docker build -t adoption-forecaster .
 if [ $? -ne 0 ]; then
   echo "❌ Docker build failed."
   exit 1
@@ -50,7 +50,7 @@ echo "🚀 Running container with service account credentials..."
 docker run \
   -v "$TMP_KEY_PATH":"$MOUNT_PATH" \
   -e GOOGLE_APPLICATION_CREDENTIALS="$MOUNT_PATH" \
-  quotas-forecasting "$@"
+  adoption-forecaster "$@"
 
 
 # ----------------------------

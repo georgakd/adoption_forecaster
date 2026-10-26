@@ -15,9 +15,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_BUILDKIT=1               
 
 # Project-level identifiers
-ENV GOOGLE_CLOUD_PROJECT=ml-cloud-374512
-ENV GCS_BUCKET_NAME=ml-quotas-forecasting
-# Add /app to Python path so quotas_forecasting package can be found
+ENV GOOGLE_CLOUD_PROJECT=YOUR_GCP_PROJECT_ID
+ENV GCS_BUCKET_NAME=adoption-forecaster-data
+# Add /app to Python path so adoption_forecaster package can be found
 ENV PYTHONPATH=/app
 
 # Install core packages:
@@ -46,7 +46,7 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry config virtualenvs.create false && poetry install --only=main --no-root
 
 # Copy the actual forecasting source code into the image
-COPY quotas_forecasting/ ./quotas_forecasting/
+COPY adoption_forecaster/ ./adoption_forecaster/
 
 # Create a non-root user for running the app securely
 # Running as root inside containers is a bad practice — it can be a security risk, especially if this image is ever used in production or exposed externally.
@@ -60,6 +60,6 @@ RUN addgroup --gid 8002 appgroup && \
 USER appuser
 
 # Set the default command to run when the container starts.
-# This means: when you run `docker run quotas-forecasting --args...`
-# ...it will actually run: `python quotas_forecasting/main.py --args...`
-ENTRYPOINT ["python", "quotas_forecasting/main.py"]
+# This means: when you run `docker run adoption-forecaster --args...`
+# ...it will actually run: `python adoption_forecaster/main.py --args...`
+ENTRYPOINT ["python", "adoption_forecaster/main.py"]

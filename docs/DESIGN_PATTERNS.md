@@ -1,6 +1,6 @@
 # SOLID Principles & Design Patterns
 
-This document explains the SOLID principles and design patterns implemented in the `quotas_forecasting` codebase.
+This document explains the SOLID principles and design patterns implemented in the `adoption_forecaster` codebase.
 
 ---
 
@@ -240,7 +240,7 @@ class Loader:
 **Example: Multiple forecasting strategies combined**
 
 ```python
-class Quotas_Forecasting:
+class Adoption_Forecaster:
     def combine_forecasts(self):
         # Multiple prediction strategies combined with weights
         self.merged_all[f"{year}_combined"] = (
@@ -420,4 +420,4 @@ def run_education_pipeline_for_all_age_groups(self, loader, writer, predictor, .
 
 ## Related documentation
 
-- **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** — LLM-based projection post-processing (`AI_adjustments`): agent loop, tools, workflow enforcement, and limitations (separate from the main forecasting pipeline).
+- **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** — LLM-based projection post-processing (`AI_adjustments`): agent loop, tools, workflow enforcement, and limitations (separate from the main forecasting pipeline).
