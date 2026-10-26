@@ -224,7 +224,7 @@ Centralized tool registry for managing all tools:
 
 When editing `rules.py` or `prompts.py`, follow the **Prompt & Rules Change Guide** so that agent behavior, invariants, and tool-call schemas are preserved.
 
-- **Location:** [`.cursor/rules/prompt-rules-change-guide.mdc`](../../.cursor/rules/prompt-rules-change-guide.mdc) (in the repo root)
+- **Location:** [`.claude/rules/prompt-rules-change-guide.md`](../../.claude/rules/prompt-rules-change-guide.md) (in the repo root; Claude Code loads it automatically when `rules.py` or `prompts.py` is opened)
 - **Scope:** Applies to `rules.py` and `prompts.py` only; excludes refactors unrelated to agent behavior, dependency changes, and tool implementation.
 
 It is applied manually, which means, it is explicitly called in the cursor agent chat prompt, like "“Apply all active MDC rules (to the active files).”"

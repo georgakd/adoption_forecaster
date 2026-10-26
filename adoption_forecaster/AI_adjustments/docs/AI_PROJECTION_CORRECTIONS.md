@@ -84,7 +84,7 @@ Files live under **`adoption_forecaster/AI_adjustments/`**. **Directory tree, ro
 ### Changing behavior safely
 
 - Edits to **`rules.py`** or **`prompts.py`** should follow the repo **Prompt & Rules Change Guide**:  
-  **`.cursor/rules/prompt-rules-change-guide.mdc`**
+  **`.claude/rules/prompt-rules-change-guide.md`**
 
 ---
 

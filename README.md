@@ -186,7 +186,35 @@ Run the script with the arguments you use for main. For example:
 - Configuration is loaded from YAML files via `config_loader.py`.
 - Key parameters include bucket names, project IDs, and validation rules (such as required year difference).
 
-## Testing with local emulators
+## Testing
+
+Run everything from the repository root inside the Poetry environment. No cloud credentials are needed for the default run (about 100 s):
+
+```sh
+pytest                                  # whole repo, including the AI_adjustments tests
+pytest tests                            # same, without the AI_adjustments tests
+pytest -m "not emulators and not realdata"   # explicit form of the default offline run
+```
+
+Test layers, from cheapest to most realistic:
+
+| Layer | Command | Needs | What it proves |
+|---|---|---|---|
+| Unit and golden tests | `pytest tests` | nothing | module logic, and that the real pipeline on a seeded synthetic world reproduces the golden CSVs in `tests/golden/` |
+| Pipeline end to end (local) | `pytest tests/e2e/test_pipeline_local.py` | nothing | the full forecasting pipeline, input files to output files |
+| Correction agent in the pipeline | `pytest tests/e2e/test_pipeline_with_correction.py` | nothing | the agent behind `correction.enabled`, with a scripted fake LLM and the synthetic source store |
+| Production path | `pytest -m emulators` | local emulators (next section) | reads and writes through fake GCS and publishes to Pub/Sub |
+| Real Eurostat backtest | `QF_REALDATA=1 pytest -m realdata` | emulators for the first fetch, then the cache in `.cache/eurostat/` | the real pipeline cut at an earlier year; asserts shapes and ranges, not exact numbers |
+| Agent benchmark (stub) | `python -m adoption_forecaster.correction.benchmark_cli --module education --seeds 0-4` | nothing | scores corrections against the synthetic truth with an oracle standing in for the model |
+| Agent benchmark (live LLM) | same CLI plus `--live --model <id>` | `NVIDIA_API_KEY` exported in your shell; about 17 minutes for 3 seeds x 5 countries | whether a real model actually corrects; see [docs/CORRECTION_AGENT.md](docs/CORRECTION_AGENT.md) |
+
+Notes:
+- The emulator and real-data tests are skipped when their environment variables are not set, so a plain `pytest` stays offline.
+- Running `main.py` on real production inputs needs the input CSVs from your own bucket (see "Local Execution"); a full run on real data goes through the real-data backtest instead.
+- The real CLI cannot enable `correction.enabled` yet: it stops with `NoSourceStoreError` until a real source store exists (see "Before enabling `correction.enabled`" in [docs/CORRECTION_AGENT.md](docs/CORRECTION_AGENT.md)).
+- Not testable locally: Secret Manager, IAM, the Cloud Run job and the image push. These need a real GCP project (see "Cloud resources").
+
+### Testing with local emulators
 
 You can run the production path (GCS reads and writes, Pub/Sub messages) without a GCP project by using local emulators. Docker must be running.
 

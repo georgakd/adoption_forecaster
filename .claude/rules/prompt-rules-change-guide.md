@@ -1,5 +1,7 @@
 ---
-alwaysApply: false
+paths:
+  - "adoption_forecaster/AI_adjustments/rules.py"
+  - "adoption_forecaster/AI_adjustments/prompts.py"
 ---
 
 # Prompt & Rules Change Guide
