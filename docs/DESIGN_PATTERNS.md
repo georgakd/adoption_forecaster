@@ -420,4 +420,4 @@ def run_education_pipeline_for_all_age_groups(self, loader, writer, predictor, .
 
 ## Related documentation
 
-- **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** — LLM-based projection post-processing (`AI_adjustments`): agent loop, tools, workflow enforcement, and limitations (separate from the main forecasting pipeline).
+- **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** — LLM-based projection post-processing (`AI_adjustments`): agent loop, tools, workflow enforcement, and limitations (separate from the main forecasting pipeline).

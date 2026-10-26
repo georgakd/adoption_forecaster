@@ -2,7 +2,7 @@
 
 **Hands-on reference** for this package: install, **CLI**, folder layout, **Education / Age_Gender** data expectations, and how to change prompts, rules, or tools.
 
-**Why this exists, trade-offs, and limitations:** [`docs/AI_PROJECTION_CORRECTIONS.md`](../../docs/AI_PROJECTION_CORRECTIONS.md). **Researcher-feedback RAG (embeddings, retrieval):** [`docs/ARCHITECTURE_RAG.md`](../../docs/ARCHITECTURE_RAG.md).
+**Why this exists, trade-offs, and limitations:** [`docs/AI_PROJECTION_CORRECTIONS.md`](docs/AI_PROJECTION_CORRECTIONS.md). **Researcher-feedback RAG (embeddings, retrieval):** [`docs/ARCHITECTURE_RAG.md`](docs/ARCHITECTURE_RAG.md).
 
 ## Overview
 
@@ -106,7 +106,7 @@ poetry run python -m adoption_forecaster.AI_adjustments.main --module education 
 
 ## Module Structure
 
-Concrete **constraints and column names** below; **design rationale** (problem/solution) is in [`docs/AI_PROJECTION_CORRECTIONS.md`](../../docs/AI_PROJECTION_CORRECTIONS.md).
+Concrete **constraints and column names** below; **design rationale** (problem/solution) is in [`docs/AI_PROJECTION_CORRECTIONS.md`](docs/AI_PROJECTION_CORRECTIONS.md).
 
 ### Education Module
 

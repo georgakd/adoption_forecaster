@@ -35,7 +35,9 @@ adoption_forecaster/
 │   │   ├── main.py               # Standalone CLI for post-processing forecast CSVs
 │   │   ├── agent.py              # CorrectionAgent orchestration (tool-calling loop)
 │   │   ├── tools.py / prompts.py / rules.py
-│   │   └── README.md             # Module developer documentation
+│   │   ├── README.md             # Module developer documentation
+│   │   ├── docs/                 # AI_PROJECTION_CORRECTIONS.md (technical reference), ARCHITECTURE_RAG.md (researcher-feedback RAG)
+│   │   └── tests/                # Import and CLI smoke tests
 │   │
 │   ├── services/                 # External service integrations
 │   │   ├── message_serializer.py # Message serialization
@@ -50,8 +52,6 @@ adoption_forecaster/
 │   └── Education/                # Education module data (input/output)
 │
 ├── docs/                        # Documentation files
-│   ├── AI_PROJECTION_CORRECTIONS.md  # Technical reference: LLM post-processing (AI_adjustments)
-│   ├── ARCHITECTURE_RAG.md           # RAG / researcher-feedback architecture for AI_adjustments
 │
 ├── Dockerfile                   # Docker image definition for cloud deployment
 ├── docker-run.sh                # Script to build and run Docker container
@@ -68,11 +68,11 @@ adoption_forecaster/
   - **data_handlers/**: Data loading, validation, file writing, and handling missing data/proxies.
   - **fetch_data/**: Fetching data from external sources (Eurostat).
   - **forecasting/**: Forecasting models, processors, and pipeline orchestration.
-  - **AI_adjustments/**: Optional **post-processing** step that uses an LLM with tool calling to review and adjust forecast CSVs (outliers, domain constraints). **Not** invoked currently by the main `main.py` forecasting CLI; run separately. See [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) and [AI_adjustments/README.md](adoption_forecaster/AI_adjustments/README.md).
+  - **AI_adjustments/**: Optional **post-processing** step that uses an LLM with tool calling to review and adjust forecast CSVs (outliers, domain constraints). **Not** invoked currently by the main `main.py` forecasting CLI; run separately. See [adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md](adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md) and [AI_adjustments/README.md](adoption_forecaster/AI_adjustments/README.md).
   - **services/**: External service integrations (Pub/Sub, protobuf serialization).
   - **testing/**: Output validation tools for local and GA environments.
   - **Age_Gender/** and **Education/**: Module-specific input/output data folders.
-- **docs/**: Project documentation (**`AI_PROJECTION_CORRECTIONS.md`**, **`ARCHITECTURE_RAG.md`**, etc.).
+- **docs/**: Project documentation (architecture, design patterns, maths review, correction agent). The `AI_adjustments` docs live in `adoption_forecaster/AI_adjustments/docs/`.
 
 ## AI projection corrections
 
@@ -80,9 +80,9 @@ The **AI adjustments** subsystem corrects exported **prediction CSVs** using Ope
 
 | Topic | Where to read |
 |--------|----------------|
-| Problem, solution, value, features, limitations (technical overview) | [docs/AI_PROJECTION_CORRECTIONS.md](docs/AI_PROJECTION_CORRECTIONS.md) |
+| Problem, solution, value, features, limitations (technical overview) | [adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md](adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md) |
 | How to run the CLI, layout, components | [adoption_forecaster/AI_adjustments/README.md](adoption_forecaster/AI_adjustments/README.md) |
-| Researcher feedback + embeddings (RAG) | [docs/ARCHITECTURE_RAG.md](docs/ARCHITECTURE_RAG.md) |
+| Researcher feedback + embeddings (RAG) | [adoption_forecaster/AI_adjustments/docs/ARCHITECTURE_RAG.md](adoption_forecaster/AI_adjustments/docs/ARCHITECTURE_RAG.md) |
 | Autonomous correction agent (cited evidence, deterministic gate, synthetic benchmark runner) | [docs/CORRECTION_AGENT.md](docs/CORRECTION_AGENT.md) |
 
 **Relationship to the main pipeline:** `adoption_forecaster/main.py` runs Eurostat loading and quota forecasting only. **AI_adjustments** is a **separate** CLI: run from the repository root with `python -m adoption_forecaster.AI_adjustments.main ...` (see that README). It loads `config.yaml` for GCP Secret Manager (`secrets.openai_api_key`) like the rest of the project.

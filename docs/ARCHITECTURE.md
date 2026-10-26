@@ -79,7 +79,7 @@ Handles the actual forecasting using multiple strategies:
 
 ### 6. Optional: AI projection corrections (`AI_adjustments/`)
 
-Not part of the default forecasting flow above. A **separate CLI** (`python -m adoption_forecaster.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](./ARCHITECTURE_RAG.md)**.
+Not part of the default forecasting flow above. A **separate CLI** (`python -m adoption_forecaster.AI_adjustments.main`) can post-process exported prediction CSVs using an LLM with tool calling (outlier review, domain constraints, optional researcher-feedback RAG). See **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** and **[ARCHITECTURE_RAG.md](../adoption_forecaster/AI_adjustments/docs/ARCHITECTURE_RAG.md)**.
 
 ---
 
@@ -532,6 +532,6 @@ The `adoption_forecaster` service:
 5. **Stores** results to both internal (ML) and external (Andromeda) GCS buckets
 6. **Notifies** Universe service via Pub/Sub with protobuf messages
 
-Optional **AI projection corrections** (`AI_adjustments/`) are documented in **[AI_PROJECTION_CORRECTIONS.md](./AI_PROJECTION_CORRECTIONS.md)** and are **not** invoked by the main service entry point by default.
+Optional **AI projection corrections** (`AI_adjustments/`) are documented in **[AI_PROJECTION_CORRECTIONS.md](../adoption_forecaster/AI_adjustments/docs/AI_PROJECTION_CORRECTIONS.md)** and are **not** invoked by the main service entry point by default.
 
 The CI/CD pipeline ensures that every merge to `main` triggers a full test run, pushes an updated Docker image to GCR, and executes the Cloud Run Job. The Pub/Sub integration enables Andromeda to automatically consume new projection files without polling, creating an event-driven data pipeline between the ML team and the Universe service.
