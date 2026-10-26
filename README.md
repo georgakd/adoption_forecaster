@@ -142,6 +142,8 @@ poetry run pre-commit install
 
 They run automatically on each commit. In case hooks have changed your file you need to stage & commit your file again.
 
+The hooks are defined in `.pre-commit-config.yaml` (trailing whitespace, end-of-file newline, YAML/TOML validity, merge-conflict markers, large files, debug statements, Black and Ruff; both read their settings from `pyproject.toml`, line length 149, Ruff with the correctness rules `E4,E7,E9,F`). They only check the files in a commit. About 20 existing files are not yet Black-formatted, so they are reformatted the first time you commit a change to them. Run `poetry run pre-commit run --all-files` to check or reformat everything at once, ideally in its own commit.
+
 ### Execution via Docker (Local & Cloud Shell)
 
 #### 1. Make sure Docker is running

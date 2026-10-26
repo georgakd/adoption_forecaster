@@ -66,3 +66,7 @@ line-length = 149
 
 [tool.ruff]
 line-length = 149
+
+[tool.ruff.lint]
+# Correctness rules only; ruff's newer defaults also enforce style and annotation modernisation that the codebase does not follow yet.
+select = ["E4", "E7", "E9", "F"]

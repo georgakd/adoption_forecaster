@@ -56,7 +56,7 @@ class CountingClient:
 
 
 def _aggregate(per_seed: list[dict]) -> dict:
-    mean = lambda key: sum(r[key] for r in per_seed) / len(per_seed)
+    mean = lambda key: sum(r[key] for r in per_seed) / len(per_seed)  # noqa: E731
     before, after = mean("mae_before"), mean("mae_after")
     return {
         "mae_before": before,
