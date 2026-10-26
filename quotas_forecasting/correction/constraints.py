@@ -9,14 +9,17 @@ SUM_TOLERANCE = 1e-9
 YOY_EPSILON = 1e-12  # float noise only: exactly max_yoy_change passes, max_yoy_change + 1e-6 fails
 
 
-def check_constraints(baseline: ForecastTable, corrected: ForecastTable, module: str, max_yoy_change: float) -> list[Violation]:
+def check_constraints(
+    baseline: ForecastTable, corrected: ForecastTable, module: str, max_yoy_change: float, yoy_caps: dict[tuple[str, str], float] | None = None
+) -> list[Violation]:
     """Return all hard-constraint violations of ``corrected`` relative to ``baseline`` (pure, sorted deterministically).
 
     Rules:
       - bounds: corrected forecast values must be in [0, 1]; a NaN where the baseline had a value is also a ``bounds`` violation.
       - historical_changed: non-forecast cells must equal the baseline (NaN equals NaN); a value where baseline was NaN counts as a change.
       - sum_to_one (education only): secondary + tertiary == 1 within 1e-9 for forecast years where both are present.
-      - yoy_cap: |corrected(y) - corrected(y-1)| <= max_yoy_change for forecast cells, when the previous year is present.
+      - yoy_cap: |corrected(y) - corrected(y-1)| <= cap for forecast cells, when the previous year is present; the cap is
+        ``yoy_caps[(country, segment)]`` when given (see ``caps.compute_yoy_caps``), else ``max_yoy_change``.
     A value where the baseline was NaN in a forecast year is allowed as long as it passes the rules above.
     """
     key = ["country", "segment", "year"]
@@ -49,8 +52,9 @@ def check_constraints(baseline: ForecastTable, corrected: ForecastTable, module:
         if not row.is_forecast or pd.isna(row.value_corr):
             continue
         prev = lookup.get((row.country, row.segment, row.year - 1), np.nan)
-        if not pd.isna(prev) and abs(row.value_corr - prev) > max_yoy_change + YOY_EPSILON:
-            add("yoy_cap", row, f"change {row.value_corr - prev:+.6f} from {row.year - 1} exceeds {max_yoy_change}")
+        cap = (yoy_caps or {}).get((row.country, row.segment), max_yoy_change)
+        if not pd.isna(prev) and abs(row.value_corr - prev) > cap + YOY_EPSILON:
+            add("yoy_cap", row, f"change {row.value_corr - prev:+.6f} from {row.year - 1} exceeds {cap:.6g}")
 
     if module == "education":
         for (country, year), group in merged[merged["is_forecast"]].groupby(["country", "year"]):

@@ -1,14 +1,25 @@
+import copy
 import functools
 import json
 
 import pytest
 
+from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.correction import benchmark_cli
 from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient, get_llm_client  # noqa: F401
 from quotas_forecasting.correction.oracle import build_oracle_client
 from quotas_forecasting.synthetic.benchmark import build_benchmark
 
 ARGS = ["--module", "education", "--seeds", "0", "--n-countries", "5"]
+
+
+@pytest.fixture(autouse=True)
+def fixed_yoy_cap(monkeypatch):
+    # the oracle corrects the synthetic world's shocks (0.03-0.08), which exceed the adaptive yoy caps of its smooth history;
+    # the fixed scalar cap keeps these tests about the CLI (the adaptive path is covered in test_caps.py)
+    config = copy.deepcopy(load_config())
+    config["correction"]["yoy_cap"]["mode"] = "fixed"
+    monkeypatch.setattr(benchmark_cli, "load_config", lambda: config)
 
 
 def _results(out_dir):

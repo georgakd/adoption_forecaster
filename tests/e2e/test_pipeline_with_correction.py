@@ -42,6 +42,8 @@ def _enabled(config):
     config = copy.deepcopy(config)
     config["correction"]["enabled"] = True
     config["correction"]["model"] = "test/model"
+    # the scripted corrections fix the synthetic world's shocks (0.03-0.08), which exceed the adaptive yoy caps of its smooth history
+    config["correction"]["yoy_cap"]["mode"] = "fixed"
     return config
 
 

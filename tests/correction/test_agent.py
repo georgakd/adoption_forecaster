@@ -24,7 +24,11 @@ from tests.correction.scripting import research_script as _research_script
 
 @pytest.fixture(scope="module")
 def config():
-    return load_config()
+    # these tests exercise the agent on the synthetic world's shocks (0.03-0.08), which exceed the adaptive yoy caps of its smooth
+    # history; the fixed scalar cap keeps them about the agent mechanics (the adaptive path is covered in test_caps.py)
+    config = copy.deepcopy(load_config())
+    config["correction"]["yoy_cap"]["mode"] = "fixed"
+    return config
 
 
 @pytest.fixture(scope="module")
@@ -278,22 +282,22 @@ def test_age_gender_module_runs(age, config):
 
 
 def test_prompts_state_constraints_and_interpolate_config(edu, config):
-    for prompt in (planner_system_prompt(0.07), researcher_system_prompt(0.07, 4)):
+    for prompt in (planner_system_prompt(), researcher_system_prompt(4)):
         lowered = prompt.lower()
-        assert "0.07" in prompt and "[0, 1]" in prompt
+        assert "cap stated" in lowered and "[0, 1]" in prompt
         assert "tertiary" in lowered and "derived" in lowered
         assert "historical" in lowered and "nan" in lowered
         assert "unchanged" in lowered
         assert "verbatim" in lowered and "citation" in lowered
         assert "corroborat" in lowered and "average" in lowered
         assert "outside knowledge" in lowered
-    assert "4" in researcher_system_prompt(0.07, 4)
+    assert "4" in researcher_system_prompt(4)
 
     small = copy.deepcopy(config)
-    small["correction"]["max_yoy_change"] = 0.07
+    small["correction"]["max_yoy_change"] = 0.07  # fixed mode: every country-segment's stated cap is the scalar
     llm = ScriptedClient([_plan()])
     run_correction(edu.baseline, "education", SyntheticSourceStore(edu.docs), llm, small)
-    assert "0.07" in llm.calls[0]["messages"][0]["content"]
+    assert "cap=0.070" in llm.calls[0]["messages"][1]["content"]
 
 
 def test_planner_summary_is_compact_capped_and_has_no_ground_truth(edu, config):

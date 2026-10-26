@@ -23,6 +23,7 @@ from quotas_forecasting.backtest.eurostat_backtest import (
 )
 from quotas_forecasting.config.config_loader import load_config
 from quotas_forecasting.correction.agent import run_correction
+from quotas_forecasting.correction.caps import compute_yoy_caps
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.evaluation import evaluate
 from quotas_forecasting.correction.llm import LLMResponse, ScriptedClient
@@ -90,8 +91,10 @@ def test_backtest_runs_through_evaluate_with_stub_agent(bench):
     result = run_correction(bench.baseline, bench.module, store, llm, config)
     report = evaluate(bench, result.corrected, result.corrections, store, config)
     # the real pipeline's own forecast can already break a hard constraint (e.g. yoy_cap after a jump in the last observed year):
-    # that is reported as baseline_violations; proposing nothing introduces no violation
-    inherent = check_constraints(bench.baseline, bench.baseline, bench.module, config["correction"]["max_yoy_change"])
+    # that is reported as baseline_violations, against the same per-segment caps the gate uses; proposing nothing introduces none
+    scalar = config["correction"]["max_yoy_change"]
+    caps = compute_yoy_caps(bench.baseline, config["correction"]["yoy_cap"], scalar)
+    inherent = check_constraints(bench.baseline, bench.baseline, bench.module, scalar, caps)
     assert result.error is None and report.n_corrections == 0
     assert report.mae_after == report.mae_before and report.hallucinated_citations == 0
     assert report.violations == 0 and report.baseline_violations == len(inherent)

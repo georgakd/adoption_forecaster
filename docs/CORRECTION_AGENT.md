@@ -7,7 +7,7 @@ An LLM agent that corrects the statistical baseline forecast using cited evidenc
 1. **Planner**: one call that reads a compact summary of the forecast table (per country-segment: recent history, forecast, deviation from trend, number of source documents per country) and returns a JSON list of suspicious country-segments.
 2. **Researcher**: for each suspect, a bounded tool-calling loop (`search_sources`, `read_source`, `propose_correction`). A proposal carries the new value, a verbatim quote from a document, the value and year the quote states, a confidence and a reason.
 
-Every proposal passes a **deterministic gate** before it touches the table: the cited quote must really occur in the document, the quoted value must match the proposed value within `citation_tolerance`, and the corrected table must satisfy the hard constraints (bounds, shares summing to one, historical values untouched, year-over-year change within `max_yoy_change`, no worsening of an existing violation). Rejections are fed back to the model as the tool result. The model can never write a value the gate has not accepted.
+Every proposal passes a **deterministic gate** before it touches the table: the cited quote must really occur in the document, the quoted value must match the proposed value within `citation_tolerance`, and the corrected table must satisfy the hard constraints (bounds, shares summing to one, historical values untouched, year-over-year change within the country-segment's cap (see `yoy_cap`), no worsening of an existing violation). Rejections are fed back to the model as the tool result. The model can never write a value the gate has not accepted.
 
 The agent never raises on LLM failure or malformed output: it returns the best table so far with an `error` string.
 
@@ -25,7 +25,8 @@ Code: `quotas_forecasting/correction/` (`agent.py` loop, `tools.py` gate and too
 | Key | Meaning |
 |---|---|
 | `enabled` | Master switch for the pipeline hook. Off by default; with it off nothing is built or called. |
-| `max_yoy_change` | Hard cap on the year-over-year change of a corrected value (share scale, e.g. `0.10`). |
+| `max_yoy_change` | Scalar cap on the year-over-year change of a corrected value (share scale, `0.10`): used for every country-segment in `yoy_cap.mode: fixed`, and as the fallback for a segment with no usable history in `adaptive` mode. |
+| `yoy_cap` | `{mode: "adaptive", quantile: 0.9, k: 3.0, floor: 0.03, ceiling: 0.30}`. Per country-segment cap computed once from the baseline's historical cells (see "Adaptive year-over-year cap" below); `mode: fixed` keeps the scalar. |
 | `citation_tolerance` | Maximum absolute difference between the proposed value and the value stated in the quote. |
 | `model` | NVIDIA model id (OpenAI-compatible endpoint at build.nvidia.com). `null` until chosen. |
 | `max_iterations_per_segment` | Tool-calling turns the researcher may use per country-segment. |
@@ -127,9 +128,41 @@ docker compose -f docker-compose.emulators.yml down -v
 | education | 0.0107 | 0.0085 (-20.6%) | 0 | 0 | passed |
 | age_gender | 0.0178 | 0.0153 (-13.8%) | 0 | 2 per seed | passed |
 
-The age_gender baseline violations come from the real pipeline itself: its 2023 forecast for Ireland, ages 65-74 (both genders), is +0.147 and +0.178 above the last observed year, more than `max_yoy_change` (0.10). `violations` counts only what the agent introduces or worsens, so these show up in `baseline_violations` and do not fail the gate.
+The age_gender baseline violations come from the real pipeline itself: its 2023 forecast for Ireland, ages 65-74 (both genders), is +0.147 and +0.178 above the last observed year, more than the fixed 0.10 cap (this table predates the adaptive cap; under the adaptive default these two moves are within their caps, see below). `violations` counts only what the agent introduces or worsens, so these show up in `baseline_violations` and do not fail the gate.
 
-The published Eurostat age_gender data breaks the 0.10 year-over-year cap too. Using the published truth as the 2023-2024 forecast gives 15 `yoy_cap` violations on this cache (for example, Irish men aged 65-74 went from 62.73% in 2022 to 92.16% in 2023). The cap is therefore stricter than reality and can block corrections toward the truth.
+The published Eurostat age_gender data breaks the 0.10 year-over-year cap too. Using the published truth as the 2023-2024 forecast gives 15 `yoy_cap` violations on this cache (for example, Irish men aged 65-74 went from 62.73% in 2022 to 92.16% in 2023). The fixed cap is therefore stricter than reality and can block corrections toward the truth.
+
+## Adaptive year-over-year cap
+
+The cap is a guard against unattended large moves, not a statistical test: nothing is estimated or tested, it only bounds how far an accepted correction may move a value from one year to the next. One scalar cannot fit both modules (Age_Gender age groups move much more than Education shares), so by default (`yoy_cap.mode: adaptive`, code in `correction/caps.py`) each country-segment gets
+
+`cap = clamp(k * max(own_q, peer_q), floor, ceiling)`
+
+where `own_q` is the `quantile` (0.9) of that series' historical absolute year-over-year changes and `peer_q` the same quantile pooled over the other countries' series of the same segment; `k = 3`, `floor = 0.03`, `ceiling = 0.30`. Only historical cells (`is_forecast == False`, consecutive years, both present) are used, so the cap never depends on forecast values or on the truth. A series (or peer pool) with fewer than 3 historical changes is not used; a key with neither gets `max_yoy_change`. `CorrectionSession` computes the caps once from the baseline; the gate, `evaluate` (`violations` and `baseline_violations`) and the prompts use the same caps. The planner summary shows `cap=` on each row and the researcher's segment brief states its cap; the system prompts state no global number.
+
+**Validation on the real cache** (`k` and `quantile` were chosen after looking at origin cut 2022 / pred 2024; origin cut 2021 / pred 2023 is reported without re-tuning). "Published moves" are the year-over-year changes of the values Eurostat published after the cut (each relative to the previous year), checked against caps computed from the history up to the cut:
+
+| Origin | Module | Published moves | Flagged, fixed 0.10 | Flagged, adaptive | Adaptive cap median (min-max) | Baseline yoy violations fixed / adaptive |
+|---|---|---|---|---|---|---|
+| cut 2022, pred 2024 (tuning) | age_gender | 502 | 15 | 1 | 0.176 (0.071-0.300) | 2 / 0 |
+| cut 2022, pred 2024 (tuning) | education | 84 | 0 | 0 | 0.049 (0.048-0.275) | 0 / 0 |
+| cut 2021, pred 2023 (out of sample) | age_gender | 500 | 16 | 2 | 0.179 (0.071-0.300) | 0 / 0 |
+| cut 2021, pred 2023 (out of sample) | education | 84 | 0 | 0 | 0.050 (0.048-0.300) | 0 / 0 |
+
+So the adaptive cap is looser than 0.10 for most Age_Gender segments (where the published data moves more) and about half of 0.10 for most Education series (where it is stricter than the fixed cap), and on both origins it flags at most 2 published moves.
+
+**Stub benchmark, fixed versus adaptive** (oracle stub, seeds 0-2; synthetic with `--n-countries 5`; `--real` on the cache). All runs passed the gate with 0 hallucinated citations and 0 introduced violations:
+
+| Data | Module | mae_before | mae_after fixed (corrections) | mae_after adaptive (corrections) |
+|---|---|---|---|---|
+| synthetic | education | 0.0118 | 0.0061, -48.1% (4) | 0.0111, -5.4% (2) |
+| synthetic | age_gender | 0.0140 | 0.0108, -22.6% (63) | 0.0106, -24.1% (64) |
+| real, cut 2022 | education | 0.0107 | 0.0092, -13.8% (10) | 0.0092, -13.8% (10) |
+| real, cut 2022 | age_gender | 0.0178 | 0.0153, -13.9% (132) | 0.0141, -20.4% (150) |
+| real, cut 2021 | education | 0.0092 | 0.0081, -12.1% (8) | 0.0081, -12.1% (8) |
+| real, cut 2021 | age_gender | 0.0209 | 0.0184, -11.8% (133) | 0.0176, -16.0% (148) |
+
+Real age_gender `baseline_violations` (cut 2022) fall from 6 (2 per seed) to 0. The synthetic education drop is expected: the synthetic world's shocks (0.03-0.08) are much larger than the year-over-year changes of its smooth history (seed 0 education caps 0.038-0.059), so the adaptive cap rejects corrections toward them. The tests that exercise the agent on those synthetic shocks therefore pin `mode: fixed`; the adaptive path has its own tests (`tests/correction/test_caps.py`).
 
 ## Live results
 

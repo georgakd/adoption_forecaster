@@ -6,6 +6,7 @@ violations already in the baseline forecast are reported separately as ``baselin
 
 from dataclasses import dataclass
 
+from quotas_forecasting.correction.caps import compute_yoy_caps
 from quotas_forecasting.correction.citations import citation_supports_correction
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.sources import SourceStore
@@ -40,12 +41,13 @@ def evaluate(benchmark: Benchmark, corrected: ForecastTable, corrections: list[C
     settings = config["correction"]
     hallucinated = sum(not citation_supports_correction(c, store, settings["citation_tolerance"]) for c in corrections)
     base, module, cap = benchmark.baseline, benchmark.module, settings["max_yoy_change"]
-    violations = introduced_violations(base, base, corrected, module, cap)
+    caps = compute_yoy_caps(base, settings["yoy_cap"], cap)  # the same per-segment caps the gate uses
+    violations = introduced_violations(base, base, corrected, module, cap, caps)
     return EvalReport(
         mae_before=_mae(benchmark.baseline, benchmark.truth),
         mae_after=_mae(corrected, benchmark.truth),
         hallucinated_citations=hallucinated,
         violations=len(violations),
         n_corrections=len(corrections),
-        baseline_violations=len(check_constraints(base, base, module, cap)),
+        baseline_violations=len(check_constraints(base, base, module, cap, caps)),
     )

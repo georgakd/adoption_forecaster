@@ -68,19 +68,28 @@ def _trend_deviation(history, forecast) -> float:
     return max(deviations, default=0.0)
 
 
-def summarize_table(table: ForecastTable, module: str, max_rows: int = MAX_SUMMARY_ROWS, source_counts: dict[str, int] | None = None) -> str:
-    """Compact planner view of the forecast table: one line per editable country-segment, largest trend deviation first, capped."""
+def summarize_table(
+    table: ForecastTable,
+    module: str,
+    max_rows: int = MAX_SUMMARY_ROWS,
+    source_counts: dict[str, int] | None = None,
+    caps: dict[tuple[str, str], float] | None = None,
+) -> str:
+    """Compact planner view of the forecast table: one line per editable country-segment, largest trend deviation first, capped.
+    With ``caps`` each line also states that country-segment's year-over-year cap."""
     entries = []
     for country, segment in _editable_segments(table, module):
         history, forecast = _segment_rows(table, country, segment)
         entries.append((-_trend_deviation(history, forecast), country, segment, history, forecast))
     entries.sort(key=lambda e: e[:3])
     lines = [
-        f"Module: {module}. Row format: country | segment | last historical values | forecast values | max deviation from recent trend.",
+        f"Module: {module}. Row format: country | segment | last historical values | forecast values | max deviation from recent trend"
+        + (" | year-over-year cap." if caps is not None else "."),
     ]
     if module == "education":
         lines.append("Only secondary is listed: tertiary = 1 - secondary.")
-    lines += [f"{c} | {s} | {_fmt(h)} | {_fmt(f)} | dev={-d:.3f}" for d, c, s, h, f in entries[:max_rows]]
+    for d, c, s, h, f in entries[:max_rows]:
+        lines.append(f"{c} | {s} | {_fmt(h)} | {_fmt(f)} | dev={-d:.3f}" + ("" if caps is None else f" | cap={caps[(c, s)]:.3f}"))
     if len(entries) > max_rows:
         lines.append(f"{len(entries) - max_rows} more country-segments omitted (smaller deviation from trend).")
     if source_counts is not None:
@@ -88,12 +97,13 @@ def summarize_table(table: ForecastTable, module: str, max_rows: int = MAX_SUMMA
     return "\n".join(lines)
 
 
-def _segment_brief(table: ForecastTable, module: str, country: str, segment: str) -> str:
+def _segment_brief(table: ForecastTable, module: str, country: str, segment: str, cap: float) -> str:
     history, forecast = _segment_rows(table, country, segment)
     note = " Tertiary is derived as 1 - secondary." if module == "education" else ""
     return (
         f"Country: {country}\nSegment: {segment}\nModule: {module}.{note}\n"
-        f"Historical values (not editable): {_fmt(history)}\nForecast values (editable unless NA): {_fmt(forecast)}"
+        f"Historical values (not editable): {_fmt(history)}\nForecast values (editable unless NA): {_fmt(forecast)}\n"
+        f"Year-over-year cap for this country-segment: {cap:.3f} (absolute change between consecutive years)"
     )
 
 
@@ -137,8 +147,8 @@ def _plan(session: CorrectionSession, module: str, llm: LLMClient, settings: dic
     editable = _editable_segments(session.baseline, module)
     counts = _source_counts(session.store, sorted({c for c, _ in editable}))
     messages = [
-        {"role": "system", "content": planner_system_prompt(settings["max_yoy_change"])},
-        {"role": "user", "content": summarize_table(session.baseline, module, MAX_SUMMARY_ROWS, counts)},
+        {"role": "system", "content": planner_system_prompt()},
+        {"role": "user", "content": summarize_table(session.baseline, module, MAX_SUMMARY_ROWS, counts, session.caps)},
     ]
     attempts = 1 + settings["max_llm_retries"]
     for attempt in range(attempts):
@@ -160,8 +170,8 @@ def _plan(session: CorrectionSession, module: str, llm: LLMClient, settings: dic
 def _research(session: CorrectionSession, module: str, country: str, segment: str, llm: LLMClient, settings: dict, log: list[dict]) -> None:
     budget = settings["max_iterations_per_segment"]
     messages = [
-        {"role": "system", "content": researcher_system_prompt(settings["max_yoy_change"], budget)},
-        {"role": "user", "content": _segment_brief(session.working, module, country, segment)},
+        {"role": "system", "content": researcher_system_prompt(budget)},
+        {"role": "user", "content": _segment_brief(session.working, module, country, segment, session.caps[(country, segment)])},
     ]
     schemas = tool_schemas()
     where = {"country": country, "segment": segment}

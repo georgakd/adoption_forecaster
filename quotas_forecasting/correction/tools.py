@@ -9,6 +9,7 @@ import inspect
 import math
 from dataclasses import dataclass
 
+from quotas_forecasting.correction.caps import compute_yoy_caps
 from quotas_forecasting.correction.citations import citation_supports_correction
 from quotas_forecasting.correction.constraints import check_constraints
 from quotas_forecasting.correction.sources import SourceStore
@@ -64,15 +65,20 @@ def _severity(v: Violation, table: ForecastTable) -> float | None:
 
 
 def introduced_violations(
-    baseline: ForecastTable, before: ForecastTable, after: ForecastTable, module: str, max_yoy_change: float
+    baseline: ForecastTable,
+    before: ForecastTable,
+    after: ForecastTable,
+    module: str,
+    max_yoy_change: float,
+    yoy_caps: dict[tuple[str, str], float] | None = None,
 ) -> list[Violation]:
     """Violations of ``after`` that ``before`` did not have, or had less severely (yoy |change|, distance outside [0, 1], |sum - 1|).
 
     A violation already present in ``before`` is exempt only if ``after`` does not make it worse; historical_changed is exempt if present.
     """
-    existing = {_key(v): v for v in check_constraints(baseline, before, module, max_yoy_change)}
+    existing = {_key(v): v for v in check_constraints(baseline, before, module, max_yoy_change, yoy_caps)}
     blocked = []
-    for v in check_constraints(baseline, after, module, max_yoy_change):
+    for v in check_constraints(baseline, after, module, max_yoy_change, yoy_caps):
         old = existing.get(_key(v))
         if old is None:
             blocked.append(v)
@@ -92,6 +98,7 @@ class CorrectionSession:
         self.module = module
         self.store = store
         self.max_yoy_change = config["correction"]["max_yoy_change"]
+        self.caps = compute_yoy_caps(self.baseline, config["correction"]["yoy_cap"], self.max_yoy_change)  # per (country, segment)
         self.tolerance = config["correction"]["citation_tolerance"]
         self.corrections: list[Correction] = []
         self.rejections: list[Rejection] = []
@@ -165,7 +172,7 @@ class CorrectionSession:
             tertiary = tentative.index[(tentative["country"] == country) & (tentative["segment"] == "tertiary") & (tentative["year"] == year)]
             if len(tertiary) == 1 and not math.isnan(tentative.at[tertiary[0], "value"]):
                 tentative.at[tertiary[0], "value"] = 1.0 - float(new_value)
-        introduced = introduced_violations(self.baseline, table, tentative, self.module, self.max_yoy_change)
+        introduced = introduced_violations(self.baseline, table, tentative, self.module, self.max_yoy_change, self.caps)
         if introduced:
             details = "; ".join(f"{v.kind} at {v.country}/{v.segment}/{v.year} ({v.detail})" for v in introduced)
             return reject(f"would introduce or worsen constraint violation(s): {details}")
@@ -239,8 +246,8 @@ def tool_schemas() -> list[dict]:
             "propose_correction",
             "Propose a new value for one non-missing forecast cell, backed by a verbatim citation. A deterministic gate accepts it only if the "
             "cell is a forecast cell with a value, the new value is in [0, 1], the citation verifies and states new_value for that country "
-            "and year, and the change introduces no constraint violation (including the cap on year-over-year change). In the education "
-            "module propose secondary only; tertiary is set to 1 - secondary automatically.",
+            "and year, and the change introduces no constraint violation (including the year-over-year cap stated for the country-segment). "
+            "In the education module propose secondary only; tertiary is set to 1 - secondary automatically.",
             {
                 "country": {"type": "string", "description": "Country name exactly as in the forecast table."},
                 "segment": {"type": "string", "description": "Segment name exactly as in the forecast table."},

@@ -226,6 +226,14 @@ prediction:
 correction:
   enabled: false
   max_yoy_change: 0.10
+  # per country-segment cap = clamp(k * max(own, peers') quantile of historical |yoy change|, floor, ceiling); see correction/caps.py
+  # mode "fixed" applies max_yoy_change to every segment (k and quantile were chosen after viewing origin 2022)
+  yoy_cap:
+    mode: "adaptive"
+    quantile: 0.9
+    k: 3.0
+    floor: 0.03
+    ceiling: 0.30
   citation_tolerance: 0.005
   model: "nvidia/nemotron-3-ultra-550b-a55b"
   max_iterations_per_segment: 6
