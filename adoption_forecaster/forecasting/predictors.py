@@ -250,25 +250,21 @@ class EducationPredictor:
         df.index = df.index.map(lambda x: f"{x[0]}_{x[1]}")
         df.index.name = "composite_index"
 
-        rw_preds_first_year = df.apply(lambda x: predict_random_walk(x, config=self.config), axis=1)
-        rw_preds_first_year.name = f"{year_of_predictions-1}_rw"
+        horizon = year_of_predictions - last_year_of_observations
+        # the random walk steps one year at a time, each step feeding on the previous one
         df_copy = df.copy()
-        df_copy[f"{year_of_predictions-1}"] = rw_preds_first_year.values
-        rw_preds_second_year = df_copy.apply(lambda x: predict_random_walk(x, config=self.config), axis=1)
-        rw_preds_second_year.name = f"{year_of_predictions}_rw"
-        rw_preds_df = pd.merge(
-            rw_preds_first_year,
-            rw_preds_second_year,
-            how="inner",
-            on="composite_index",
-            suffixes=(f"{year_of_predictions-1}_rw", f"{year_of_predictions}_rw"),
-        )
-        rw_preds_df.index = rw_preds_first_year.index
+        rw_steps = []
+        for year in range(last_year_of_observations + 1, year_of_predictions + 1):
+            step = df_copy.apply(lambda x: predict_random_walk(x, config=self.config), axis=1)
+            step.name = f"{year}_rw"
+            df_copy[f"{year}"] = step.values
+            rw_steps.append(step)
+        rw_preds_df = pd.concat(rw_steps, axis=1)
 
         preds = pd.DataFrame(index=df.index, columns=range(start_year, year_of_predictions + 1))
         pred_idx = list(preds.columns)
         theta_preds = df.apply(
-            lambda x: fit_predict_theta(x, pred_idx, config=self.config, last_year_of_observations=last_year_of_observations),
+            lambda x: fit_predict_theta(x, pred_idx, config=self.config, last_year_of_observations=last_year_of_observations, return_last_n=horizon),
             axis=1,
         )  # theta forecast for individual observations
         theta_preds.columns = [f"{year}_theta" for year in theta_preds.columns]
@@ -293,7 +289,7 @@ class EducationPredictor:
         df = df.join(parts).drop(columns=["composite_index"]).set_index(["country", "education"])
 
         # for each of the prediction years,
-        for i in [1, 2]:
+        for i in range(1, horizon + 1):
             df_final = pd.DataFrame(
                 {
                     "country": merged_all.index.get_level_values(0).values,
@@ -317,7 +313,7 @@ class EducationPredictor:
 
         df.columns = [int(i) for i in df.columns]
 
-        for year_col in [last_year_of_observations + 1, last_year_of_observations + 2]:
+        for year_col in range(last_year_of_observations + 1, year_of_predictions + 1):
             for country in df.index.get_level_values(0).unique():
                 try:
                     secondary_val = df.loc[(country, "secondary"), year_col]

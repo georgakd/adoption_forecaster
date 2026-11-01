@@ -7,7 +7,8 @@ is asserted from reading the code alone.
 
 **Outcome in one paragraph.** Suspect (a) changes no value. The blend weights in (b) were never justified, but the backtests now
 support them: none of the alternatives tried does better on both benchmarks. The LASSO proxy path in (c) is unused in production,
-and it is broken if switched on: Age_Gender crashes, and once that crash is bypassed it writes 1% into the gaps. The logistic
+and it was broken if switched on: Age_Gender crashed, and once that crash was bypassed it wrote 1% into the gaps (fixed
+2026-11-01, still off by default). The logistic
 ceiling in (d) cannot reach the 100% values that about a fifth of the real Age_Gender cells hold. The `replace(0, nan)` in (e) is
 needed, but a missing tertiary level silently set secondary to exactly 1 (fixed 2026-10-28, see "Fixes applied after the review"). LASSO with too few proxies (f) crashes or falls back to
 the proxies' mean. None of the experimental methods passed the decision rule. `prediction.method` stays `"ensemble"`, the only
@@ -101,25 +102,24 @@ copied from that command's output. The command also writes per-origin columns, w
 
 ### (c) The LASSO proxy path is inactive (`target_markets: {}`)
 
-- **Verdict: confirmed dead in production. If enabled, it is broken in both modules.**
+- **Verdict: confirmed dead in production. If enabled, it was broken in both modules (fixed 2026-11-01, see "Fixes applied after
+  the review"; the evidence below describes the code before the fix).**
 - **Evidence:**
   - *Inactive:* `test_a_and_c_lasso_paths_are_never_called_by_the_default_pipeline` replaces `ProxyHandler.apply_LASSO_...` and
     `adoption_forecaster.train_lasso` with functions that raise. Both pipelines still complete.
-  - *Age_Gender, enabled:* `test_c_age_gender_lasso_path_crashes_when_enabled` (Austria as the target, missing 2023-2024, with
-    four proxies) raises `TypeError: 'NoneType' object is not subscriptable`. The cause is that `extend_time_series_for_group`
+  - *Age_Gender, enabled:* with Austria as the target, missing 2023-2024, and four proxies, the pipeline raised
+    `TypeError: 'NoneType' object is not subscriptable`. The cause is that `extend_time_series_for_group`
     calls `backtest_model(lasso, X_train, y_train)` without `config`.
-  - *Age_Gender, crash bypassed:* `test_c_..._writes_one_percent_when_the_crash_is_bypassed` stubs `backtest_model`. Every filled
-    cell then becomes 0.01. The data are still in percent (0-100) when the LASSO output is clipped to `[min_prediction,
+  - *Age_Gender, crash bypassed:* with `backtest_model` stubbed, every filled cell became 0.01. The data are still in percent (0-100) when the LASSO output is clipped to `[min_prediction,
     max_prediction] = [0, 1]`, and the later `/100` turns the clip into 1%.
   - *Age_Gender, leakage:* the code also uses `y_train = group[str(year - 1)]`, which is the last column of `X_train`. That leaks
     the target into the features.
-  - *Education, enabled:* `test_c_education_lasso_path_needs_exactly_three_hardcoded_targets` raises `IndexError` with one target
-    market. `get_proxy_countries` hard-codes three targets (Iceland, North Macedonia, UK) by position, with a lower correlation
+  - *Education, enabled:* one target market raised `IndexError`. `get_proxy_countries` hard-codes three targets (Iceland, North Macedonia, UK) by position, with a lower correlation
     threshold for the second one.
   - *What it is meant to do:* the path backfills a target country's missing recent years from proxy countries. It is not a forecast
     of the prediction horizon.
-- **Decision:** leave it disabled. It must not be switched on until it is fixed: the missing `config`, the percent-scale clip, the
-  leaking `y_train` and the hard-coded three targets. The balancing donor-weighting below is a tested alternative for this
+- **Decision:** leave it disabled. The four defects (the missing `config`, the percent-scale clip, the leaking `y_train` and the
+  hard-coded three targets) are fixed, but the backfilled values have not been scored on real data, and (f) still applies. The balancing donor-weighting below is a tested alternative for this
   backfilling job, but it was not adopted (see the results).
 
 ### (d) Clipping to [0, 1] versus the logistic ceiling `K_max` 0.995 and `K_guess_factor`
@@ -186,10 +186,11 @@ copied from that command's output. The command also writes per-origin columns, w
 - **(h) 16-64 against 16-74.** These are two independent pipeline runs on different input rows (the `Age group` filter in
   `standardize_columns_with_regex`). Neither benchmark scores the 16-74 frame: both capture only the first, 16-64, predictor
   call. This is a limitation of this review, not a defect.
-- **(i) The two-year horizon is hard-coded.** `test_i_education_predictor_cannot_forecast_three_years_ahead`: `predict(df, 2022,
-  2025)` raises `KeyError`. The `for i in [1, 2]` loop, `theta.return_last_n: 2` and the two-step random walk all assume the
-  horizon, and `modules.education.settings.n_predictions` is never read by the Education predictor. With `validation.year_difference
-  == 2` the configuration is consistent, but the parameter only appears to be configurable.
+- **(i) The two-year horizon is hard-coded.** `predict(df, 2022, 2025)` raised `KeyError` (fixed 2026-11-01 for the Education
+  predictor, `test_i_education_predictor_forecasts_the_requested_horizon`; see "Fixes applied after the review"). The `for i in
+  [1, 2]` loop, `theta.return_last_n: 2` and the two-step random walk all assumed the horizon, and
+  `modules.education.settings.n_predictions` is never read by the Education predictor. With `validation.year_difference == 2` the
+  configuration is consistent, but the parameter only appears to be configurable.
 - **(j) The ceiling rule assumes three observations per series.** `adjust_100prc_predictions_cases` takes the last three valid
   indices with no guard, so short or gappy series crashed the Age_Gender pipeline (`KeyError: None`). This is why the real origins
   2019 and 2020 could not run. Fixed 2026-10-28: with fewer than three observations rule (a) does not apply and rule (b) can
@@ -325,12 +326,30 @@ to the ensemble (-2.0% against -11.9%), but it still loses.
   (`predictors.prediction_method`, which `get_predictor` validates). The experimental code stays in the repo, documented and
   tested, for re-evaluation as more real origins become available. A re-evaluation should not tune on 2019-2022 real data.
 
-## Fixes applied after the review (2026-10-28)
+## Fixes applied after the review (2026-10-28 and 2026-11-01)
 
 - **(e)** `calculate_internet_users_ratio` now sets every level's ratio to NaN in a year where any level is missing.
 - **(j)** `adjust_100prc_predictions_cases` takes the last (up to) three valid observations. Rule (a) needs three observations at
   100%; with fewer, rule (a) does not apply and rule (b) can.
 - The golden CSVs are unchanged: neither case occurs in the golden inputs.
+
+Further fixes (2026-11-01), golden CSVs unchanged:
+
+- **(c), Age_Gender:** `backtest_model` gets `config`; the target is the proxies' value in the predicted year (only proxies that
+  observe it), not the year before; the clip is applied on the share scale before scaling back to percent, in both
+  `extend_time_series_for_group` and `backtest_model`; the target's features are the columns the model was trained on.
+  `test_c_age_gender_lasso_path_fills_the_gap_on_the_share_scale` fills Austria's 2023-2024 gap on synthetic data within 0.01 of
+  the truth on average (it was 0.01 everywhere).
+- **(c), Education:** any number of target markets. Each target uses `correlation_threshold` and falls back to
+  `correlation_threshold_low` when no proxy passes it; the low threshold used to be tied to the second position (North
+  Macedonia). `test_c_education_lasso_path_takes_any_number_of_targets`.
+- **(c), still open:** (f) (too few proxies), and no real-data evaluation. `target_markets` stays `{}`.
+- **(i):** the Education predictor forecasts `year_of_predictions - last_year_of_observations` years (random walk stepped year by
+  year, Theta returning that many values, blend and normalization over every year). `main.py` still requires the difference to
+  equal `validation.year_difference` (2), `modules.education.settings.n_predictions` is still not read, and the Age_Gender path
+  (`n_predictions`, `theta.return_last_n`, the year-by-year clipping in `_merge_and_preprocess_predictions`) still assumes two
+  years.
+- **(d)** is not fixed: it changes the goldens and needs its own evaluation.
 - Re-run after the fixes: `python -m adoption_forecaster.backtest.compare --skip-weights` (9062 s on the maintainer's machine).
   The synthetic tables and the GAM tuning are unchanged. All real origins now run for both modules. The blend-weight table above
   was not re-run and still uses Age_Gender origins 2021-2022 only.

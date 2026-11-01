@@ -72,63 +72,16 @@ class ProxyHandler:
         high_threshold = self.config["modules"]["education"]["settings"]["correlation_threshold"]
         low_threshold = self.config["modules"]["education"]["settings"]["correlation_threshold_low"]
 
-        iceland_sec_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[0],
-            corr_sec,
-            high_threshold,
-            edu_levels[0],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
-        north_m_sec_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[1],
-            corr_sec,
-            low_threshold,
-            edu_levels[0],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
-        uni_kin_sec_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[2],
-            corr_sec,
-            high_threshold,
-            edu_levels[0],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
+        # a country with no proxy above the high threshold falls back to the low one (as North Macedonia did when the three
+        # targets were hard-coded by position)
+        def proxies(country, corr, edu_level):
+            exclude = set(countries_with_missing_data)
+            found = self.find_proxy_countries_using_correlation(country, corr, high_threshold, edu_level, set_exclude_countries=exclude)
+            return found or self.find_proxy_countries_using_correlation(country, corr, low_threshold, edu_level, set_exclude_countries=exclude)
 
-        iceland_ter_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[0],
-            corr_ter,
-            high_threshold,
-            edu_levels[1],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
-        north_m_ter_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[1],
-            corr_ter,
-            low_threshold,
-            edu_levels[1],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
-        uni_kin_ter_proxy_countries = self.find_proxy_countries_using_correlation(
-            countries_with_missing_data[2],
-            corr_ter,
-            high_threshold,
-            edu_levels[1],
-            set_exclude_countries=set(countries_with_missing_data),
-        )
-
-        sec_proxy_countries = [
-            iceland_sec_proxy_countries,
-            north_m_sec_proxy_countries,
-            uni_kin_sec_proxy_countries,
-        ]
-        ter_proxy_countries = [
-            iceland_ter_proxy_countries,
-            north_m_ter_proxy_countries,
-            uni_kin_ter_proxy_countries,
-        ]
         proxy_countries_dict = {
-            edu_levels[0]: sec_proxy_countries,
-            edu_levels[1]: ter_proxy_countries,
+            edu_levels[0]: [proxies(country, corr_sec, edu_levels[0]) for country in countries_with_missing_data],
+            edu_levels[1]: [proxies(country, corr_ter, edu_levels[1]) for country in countries_with_missing_data],
         }
 
         return proxy_countries_dict
@@ -289,24 +242,13 @@ class ProxyHandler:
             pd.DataFrame: DataFrame with filled missing data
 
         Notes:
-            - Specifically handles Iceland, North Macedonia, and UK
+            - Handles any number of countries with missing data
             - Uses proxy countries for prediction
             - Returns complete dataset with filled values
         """
         proxy_countries_dict = self.get_proxy_countries(df, countries_with_missing_data, edu_levels)
-        last_year_of_observations_sec = [
-            df.loc[countries_with_missing_data[0], edu_levels[0]].last_valid_index(),
-            df.loc[countries_with_missing_data[1], edu_levels[0]].last_valid_index(),
-            df.loc[countries_with_missing_data[2], edu_levels[0]].last_valid_index(),
-        ]
-        last_year_of_observations_ter = [
-            df.loc[countries_with_missing_data[0], edu_levels[1]].last_valid_index(),
-            df.loc[countries_with_missing_data[1], edu_levels[1]].last_valid_index(),
-            df.loc[countries_with_missing_data[2], edu_levels[1]].last_valid_index(),
-        ]
         last_year_of_observations_dict = {
-            edu_levels[0]: last_year_of_observations_sec,
-            edu_levels[1]: last_year_of_observations_ter,
+            edu_level: [df.loc[country, edu_level].last_valid_index() for country in countries_with_missing_data] for edu_level in edu_levels
         }
 
         online_pop_by_edu_ratios_st_extrap = self.extrapolate_with_Lasso(

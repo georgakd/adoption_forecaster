@@ -233,11 +233,13 @@ class Adoption_Forecaster:
                 for year in range(predict_start_year, predict_end_year + 1):
                     train_columns = [str(y) for y in range(start_year, year)]
 
-                    X_train = group[train_columns].dropna(axis=1, how="all").astype(float)
-                    y_train = group[str(year - 1)].dropna().astype(float)
+                    # proxies with the predicted year observed: their earlier years are the features, that year is the target
+                    observed = group[str(year)].notna()
+                    X_train = group.loc[observed, train_columns].dropna(axis=1, how="all").astype(float)
+                    y_train = group.loc[observed, str(year)].astype(float)
                     lasso = train_lasso(X_train, y_train, config=self.config)
 
-                    mse_backtest, mae_backtest, mape_backtest = backtest_model(lasso, X_train, y_train)
+                    mse_backtest, mae_backtest, mape_backtest = backtest_model(lasso, X_train, y_train, config=self.config)
                     results.append(
                         {
                             "target_market": target_market,
@@ -259,7 +261,7 @@ class Adoption_Forecaster:
                     if target_series.empty:
                         continue
 
-                    X_test = target_series[train_columns].astype(float)
+                    X_test = target_series[X_train.columns].astype(float)
                     scaling_factor = self.config["prediction"]["preprocessing"]["scaling_factor"]
                     X_test_scaled = X_test / scaling_factor
                     y_pred_full_scaled = lasso.predict(X_test_scaled)
@@ -267,12 +269,8 @@ class Adoption_Forecaster:
                     min_prediction = self.config["prediction"]["preprocessing"]["min_prediction"]
                     max_prediction = self.config["prediction"]["preprocessing"]["max_prediction"]
 
-                    if clip_predictions:
-                        y_pred_full = np.clip(
-                            y_pred_full_scaled * scaling_factor,
-                            min_prediction,
-                            max_prediction,
-                        )
+                    if clip_predictions:  # the data are still in percent here: clip on the share scale, then scale back
+                        y_pred_full = np.clip(y_pred_full_scaled, min_prediction, max_prediction) * scaling_factor
                     else:
                         y_pred_full = y_pred_full_scaled * scaling_factor
 

@@ -276,7 +276,7 @@ def predict_random_walk(series, config=None):
     return random_walk_pred_individuals_smoothed
 
 
-def fit_predict_theta(series, pred_idx, config=None, last_year_of_observations=None):
+def fit_predict_theta(series, pred_idx, config=None, last_year_of_observations=None, return_last_n=None):
     """
     Fit and predict using the Theta forecasting method.
 
@@ -284,15 +284,15 @@ def fit_predict_theta(series, pred_idx, config=None, last_year_of_observations=N
         series (pd.Series): Time series data to fit and predict from
         pred_idx (list): Index for predictions
         config (dict): Configuration dictionary
+        return_last_n (int): Number of last predictions to return (default: prediction.theta.return_last_n)
 
     Returns:
-        pd.Series: Last two predictions from the Theta model
+        pd.Series: Last return_last_n predictions from the Theta model
 
     Notes:
         - Uses ThetaForecaster without seasonality
         - Preprocesses data and handles missing values
         - Clips predictions to [0, 100] range
-        - Returns only last two predictions
     """
     series = preprocess(series.astype("float"))
 
@@ -308,7 +308,8 @@ def fit_predict_theta(series, pred_idx, config=None, last_year_of_observations=N
         )
 
     theta_config = config["prediction"]["theta"]
-    return_last_n = theta_config["return_last_n"]
+    if return_last_n is None:
+        return_last_n = theta_config["return_last_n"]
     # Filter pred_idx to only include future years (greater than the last valid index)
     future_pred_idx = [year for year in pred_idx if year > series.last_valid_index()]
     pred_idx_individuals = pd.Index(future_pred_idx)
@@ -624,7 +625,9 @@ def backtest_model(lasso, X_backtest, y_backtest, config=None):
     y_pred_backtest_scaled = lasso.predict(X_backtest_scaled)
 
     if clip_predictions:
-        y_pred_backtest = np.clip(y_pred_backtest_scaled * scaling_factor, 0, 1)
+        min_prediction = config["prediction"]["preprocessing"]["min_prediction"]
+        max_prediction = config["prediction"]["preprocessing"]["max_prediction"]
+        y_pred_backtest = np.clip(y_pred_backtest_scaled, min_prediction, max_prediction) * scaling_factor
     else:
         y_pred_backtest = y_pred_backtest_scaled * scaling_factor
 
