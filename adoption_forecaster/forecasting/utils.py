@@ -521,14 +521,11 @@ def adjust_100prc_predictions_cases(df_preds, df_train_data, year_of_predictions
         total_processed = 0
         for index in df_train_data.index:
             total_processed += 1
-            last_valid_index = df_train_data.loc[index].last_valid_index()
-            intermediate_valid_index = df_train_data.loc[index].drop(last_valid_index).last_valid_index()
-            first_valid_index = df_train_data.loc[index].drop([last_valid_index, intermediate_valid_index]).last_valid_index()
+            last_three = df_train_data.loc[index].dropna().iloc[-3:]  # a series can have fewer than three observations
             # Rule (a): Set to 100% if last three years are 100% and predictions are at max
             if (
-                (df_train_data.loc[index][first_valid_index] == 1)
-                and (df_train_data.loc[index][intermediate_valid_index] == 1)
-                and (df_train_data.loc[index][last_valid_index] == 1)
+                len(last_three) == 3
+                and (last_three == 1).all()
                 and (df_preds.loc[index][f"{year}_logistic"].round(3) >= K_max)
                 and (df_preds.loc[index][f"{year}_rw"] == 1)
                 and (df_preds.loc[index][f"{year}_theta"] == 1)
@@ -537,12 +534,7 @@ def adjust_100prc_predictions_cases(df_preds, df_train_data, year_of_predictions
                 rule_a_count += 1
             # Rule (b): Multiply by random factor if last three years are not all 100% but predictions are at max
             if (
-                (
-                    df_train_data.loc[index][first_valid_index]
-                    + df_train_data.loc[index][intermediate_valid_index]
-                    + df_train_data.loc[index][last_valid_index]
-                    != 3
-                )
+                (len(last_three) < 3 or last_three.sum() != 3)
                 and (df_preds.loc[index][f"{year}_logistic"].round(3) >= K_max)
                 and (df_preds.loc[index][f"{year}_rw"] == 1)
                 and (df_preds.loc[index][f"{year}_theta"] == 1)

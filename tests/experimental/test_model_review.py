@@ -124,13 +124,28 @@ def test_d_ceiling_rule_b_random_factor_is_one_constant(config):
     assert factor == pytest.approx(1.0032132, abs=1e-7)  # the seed is reset before every row, so every row gets this factor
 
 
-def test_d_ceiling_rule_needs_three_observations_per_series(config):
+def _ceiling_preds(value):
+    preds = pd.DataFrame({"country_age": ["X 16_24"], "gender": ["male"]})
+    for year in (2022, 2023):
+        for model in ("logistic", "rw", "theta", "combined"):
+            preds[f"{year}_{model}"] = value
+    return preds
+
+
+def test_j_ceiling_rule_leaves_short_series_below_the_ceiling_alone(config):
+    # (j) fixed: fewer than three observations used to raise KeyError (real age_gender origins 2019 and 2020 could not run)
     train = pd.DataFrame({2019: [np.nan], 2020: [0.9], 2021: [0.95]}, index=["X 16_24 male"])
-    preds = pd.DataFrame({"country_age": ["X 16_24"], "gender": ["male"], "2023_logistic": [0.9], "2023_rw": [0.9], "2023_theta": [0.9]})
-    for col in ("2022_logistic", "2022_rw", "2022_theta"):
-        preds[col] = 0.9
-    with pytest.raises(KeyError):  # this is why the real age_gender backtest cannot run at origins 2019 and 2020
-        adjust_100prc_predictions_cases(preds, train, 2023, config)
+    out = adjust_100prc_predictions_cases(_ceiling_preds(0.9), train, 2023, config)
+    assert (out[["2022_combined", "2023_combined"]] == 0.9).all(axis=None)
+
+
+def test_j_ceiling_rule_b_applies_to_a_short_series_at_the_ceiling(config):
+    # two observations at 100% are not "the last three years at 100%", so rule (a) cannot apply and rule (b) does
+    train = pd.DataFrame({2019: [np.nan], 2020: [1.0], 2021: [1.0]}, index=["X 16_24 male"])
+    preds = _ceiling_preds(1.0)
+    preds[["2022_logistic", "2023_logistic"]] = config["modules"]["age_gender"]["settings"]["K_max"]
+    out = adjust_100prc_predictions_cases(preds, train, 2023, config)
+    assert (out[["2022_combined", "2023_combined"]] < 1).all(axis=None)
 
 
 # (e) .replace(0, np.nan) on the Education ratios
@@ -152,10 +167,12 @@ def test_e_replace_zero_undoes_the_groupby_sum_of_an_all_missing_year():
     assert merged.replace(0, np.nan)[2021].isna().all()  # ... and the replace restores the gap
 
 
-def test_e_a_missing_tertiary_level_makes_secondary_exactly_one():
+def test_e_a_missing_tertiary_level_makes_the_year_missing_for_both_levels():
+    # (e) fixed: secondary used to become exactly 1.0 (Portugal 2006 in the real data)
     merged = MissingDataHandler.merge_education_levels(MissingDataHandler.calculate_internet_users_ratio(_abs_users(2021)))
     merged = merged.astype(float).replace(0, np.nan)
-    assert merged.loc[("X", "secondary"), 2021] == 1.0 and np.isnan(merged.loc[("X", "tertiary"), 2021])
+    assert merged[2021].isna().all()
+    assert not merged[[2020, 2022]].isna().any(axis=None)
 
 
 # (f) LASSO CV with very few proxy rows

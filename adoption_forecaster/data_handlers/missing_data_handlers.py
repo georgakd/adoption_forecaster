@@ -274,8 +274,9 @@ class MissingDataHandler:
                 level_2_val = group.loc[:, column].at[midx[cntry, 2]]
                 level_3_val = group.loc[:, column].at[midx[cntry, 3]]
 
-                # Avoid division by zero: if total is zero or NaN, set ratios to NaN
-                if total == 0 or pd.isna(total):
+                # Avoid division by zero: if total is zero or NaN, set ratios to NaN.
+                # A missing level would make the others sum to 1 without it, so the whole year is missing.
+                if total == 0 or pd.isna(total) or group[column].isna().any():
                     level_1_ratio = pd.NA
                     level_2_ratio = pd.NA
                     level_3_ratio = pd.NA

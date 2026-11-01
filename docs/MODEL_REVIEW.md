@@ -9,7 +9,7 @@ is asserted from reading the code alone.
 support them: none of the alternatives tried does better on both benchmarks. The LASSO proxy path in (c) is unused in production,
 and it is broken if switched on: Age_Gender crashes, and once that crash is bypassed it writes 1% into the gaps. The logistic
 ceiling in (d) cannot reach the 100% values that about a fifth of the real Age_Gender cells hold. The `replace(0, nan)` in (e) is
-needed, but a missing tertiary level silently sets secondary to exactly 1. LASSO with too few proxies (f) crashes or falls back to
+needed, but a missing tertiary level silently set secondary to exactly 1 (fixed 2026-10-28, see "Fixes applied after the review"). LASSO with too few proxies (f) crashes or falls back to
 the proxies' mean. None of the experimental methods passed the decision rule. `prediction.method` stays `"ensemble"`, the only
 accepted value, so the goldens are unchanged.
 
@@ -35,13 +35,12 @@ copied from that command's output. The command also writes per-origin columns, w
   - Reported origins are 2019-2022, the window in which `pred_year - cut_year == validation.year_difference == 2` holds and the cache
     contains the truth.
   - **Education ran at all four origins.**
-  - **Age_Gender ran at 2021 and 2022 only.** At 2019 and 2020 the pipeline itself fails with `KeyError: None` inside
-    `adjust_100prc_predictions_cases`. That rule needs three valid observations per series between `start_year` (2017) and the
-    cut, and some real series have gaps there. Test `test_d_ceiling_rule_needs_three_observations_per_series` pins this; see
-    suspect (j).
+  - **Age_Gender ran at 2021 and 2022 only** in the results below. At 2019 and 2020 the pipeline failed with `KeyError: None`
+    inside `adjust_100prc_predictions_cases`, because some real series have fewer than three observations between `start_year`
+    (2017) and the cut; see suspect (j). Fixed 2026-10-28: all four origins now run.
   - Origin 2018 (Education only) was used for tuning and is not reported as a result. **It is not fully out of sample**: it is
     scored on 2019-2020, and the earliest reported origin (2019) is scored on 2020-2021, so the 2020 truth cells were used both to
-    choose `GAM_ANCHOR` and to report results. Nothing earlier can serve instead (Age_Gender cannot run before 2021, see (j)).
+    choose `GAM_ANCHOR` and to report results.
     The anchor-robustness check under Results scores both anchor choices to show whether the decision depends on it.
 - **Metric**: `correction.evaluation._mae`. This takes the MAE over the forecast cells of each (country, segment), then averages
   over (country, segment). Cells with no published truth are dropped.
@@ -148,15 +147,15 @@ copied from that command's output. The command also writes per-origin columns, w
 - **Evidence:**
   - `test_e_replace_zero_undoes_the_groupby_sum_of_an_all_missing_year`: `merge_education_levels` uses `groupby().sum()`, which
     turns an all-missing year into 0. The replace turns it back into a gap.
-  - `test_e_a_missing_tertiary_level_makes_secondary_exactly_one`: when only ISCED level 3 is missing in a year,
-    `calculate_internet_users_ratio` divides by the sum of levels 1 and 2. Secondary then becomes exactly 1.0 and tertiary becomes
-    NaN.
+  - When only ISCED level 3 is missing in a year, `calculate_internet_users_ratio` divided by the sum of levels 1 and 2.
+    Secondary then became exactly 1.0 and tertiary became NaN.
   - This happens in the real data. Portugal has two such history cells at every origin (for example 2006, secondary = 1.0); see the
     diagnostics table.
   - Because S + T = 1 holds everywhere else, these cells are the only reason the per-level forecasts stop summing to 1 before
     normalization. For Portugal at origin 2022 the pre-normalization sum is off by 3.9e-3, against at most 4e-9 for every other
     country. The probe that measured this was run separately from `compare.py` and is not part of the reproducible output.
-- **Decision:** keep the replace. Recommended fix, separately: treat a year as missing for both levels when any level is missing.
+- **Decision:** keep the replace. Fixed 2026-10-28: a year with any level missing is now missing for both levels
+  (`test_e_a_missing_tertiary_level_makes_the_year_missing_for_both_levels`). See "Fixes applied after the review".
 
 ### (f) LASSO CV with very few proxy rows (`n_splits = min(5, rows)`)
 
@@ -192,8 +191,9 @@ copied from that command's output. The command also writes per-origin columns, w
   horizon, and `modules.education.settings.n_predictions` is never read by the Education predictor. With `validation.year_difference
   == 2` the configuration is consistent, but the parameter only appears to be configurable.
 - **(j) The ceiling rule assumes three observations per series.** `adjust_100prc_predictions_cases` takes the last three valid
-  indices with no guard, so short or gappy series crash the Age_Gender pipeline (`KeyError: None`). This is why the real origins
-  2019 and 2020 cannot run.
+  indices with no guard, so short or gappy series crashed the Age_Gender pipeline (`KeyError: None`). This is why the real origins
+  2019 and 2020 could not run. Fixed 2026-10-28: with fewer than three observations rule (a) does not apply and rule (b) can
+  (`test_j_ceiling_rule_*`). See "Fixes applied after the review".
 - **(k) Units.** Education inputs are divided by 100 on load. Age_Gender inputs are divided by 100 only in `create_train_data`,
   after the LASSO extension, which is the cause of the 1% bug in (c). `scaling_factor: 100` is used only by that LASSO path.
 
@@ -270,7 +270,8 @@ Synthetic, dev seeds 0-9 (used for GAM tuning):
 | education | 0.0161 | 0.0152 | 0.0152 | 0.0155 |
 | age_gender | 0.0183 | 0.0187 | 0.0165 | 0.0167 |
 
-Real Eurostat backtest (cut c, predict c+1 and c+2). Age_Gender origins 2019 and 2020 cannot run; see (j).
+Real Eurostat backtest (cut c, predict c+1 and c+2), measured before the 2026-10-28 fixes. Age_Gender origins 2019 and 2020 could
+not run then; see (j) and "Fixes applied after the review".
 
 | module | method | MAE (mean) | 2019 | 2020 | 2021 | 2022 | fallback_share |
 |---|---|---|---|---|---|---|---|
@@ -323,6 +324,48 @@ to the ensemble (-2.0% against -11.9%), but it still loses.
 - **Decision:** no method becomes an option, and no default changes. `prediction.method` accepts only `"ensemble"`
   (`predictors.prediction_method`, which `get_predictor` validates). The experimental code stays in the repo, documented and
   tested, for re-evaluation as more real origins become available. A re-evaluation should not tune on 2019-2022 real data.
+
+## Fixes applied after the review (2026-10-28)
+
+- **(e)** `calculate_internet_users_ratio` now sets every level's ratio to NaN in a year where any level is missing.
+- **(j)** `adjust_100prc_predictions_cases` takes the last (up to) three valid observations. Rule (a) needs three observations at
+  100%; with fewer, rule (a) does not apply and rule (b) can.
+- The golden CSVs are unchanged: neither case occurs in the golden inputs.
+- Re-run after the fixes: `python -m adoption_forecaster.backtest.compare --skip-weights` (9062 s on the maintainer's machine).
+  The synthetic tables and the GAM tuning are unchanged. All real origins now run for both modules. The blend-weight table above
+  was not re-run and still uses Age_Gender origins 2021-2022 only.
+
+Real Eurostat backtest after the fixes (cut c, predict c+1 and c+2):
+
+| module | method | MAE (mean) | 2019 | 2020 | 2021 | 2022 | fallback_share |
+|---|---|---|---|---|---|---|---|
+| education | ensemble | 0.0098 | 0.0087 | 0.0107 | 0.0091 | 0.0107 | |
+| education | gam | 0.0109 | 0.0079 | 0.0087 | 0.0113 | 0.0157 | |
+| education | entropy_proxy | 0.0113 | 0.0109 | 0.0125 | 0.0106 | 0.0111 | 0.0455 |
+| education | kernel_proxy | 0.0117 | 0.0118 | 0.0130 | 0.0108 | 0.0114 | 0.0000 |
+| age_gender | ensemble | 0.0217 | 0.0247 | 0.0233 | 0.0209 | 0.0178 | |
+| age_gender | gam | 0.0257 | 0.0368 | 0.0228 | 0.0225 | 0.0208 | |
+| age_gender | entropy_proxy | 0.0275 | 0.0368 | 0.0334 | 0.0193 | 0.0204 | 0.5218 |
+| age_gender | kernel_proxy | 0.0275 | 0.0368 | 0.0334 | 0.0215 | 0.0184 | 0.5038 |
+
+Decision after the fixes (relative MAE reduction against the ensemble; positive is better):
+
+| module | method | gain synthetic (held-out) | gain real | wins |
+|---|---|---|---|---|
+| education | gam | +6.0% | -11.1% | no |
+| education | entropy_proxy | +4.2% | -15.1% | no |
+| education | kernel_proxy | +5.5% | -19.7% | no |
+| age_gender | gam | -0.7% | -18.6% | no |
+| age_gender | entropy_proxy | +8.1% | -26.7% | no |
+| age_gender | kernel_proxy | +8.7% | -26.9% | no |
+
+- **The decision is unchanged:** no method wins, and `prediction.method` stays `"ensemble"`. Every alternative is further behind
+  the ensemble on real data than before.
+- "History cells with secondary == 1 and tertiary NaN" in the diagnostics table is now 0 at every origin (was 2).
+- Not investigated: at Age_Gender origin 2019 the GAM and both proxy methods score exactly the same MAE (0.0368), and at 2020 the
+  two proxy methods do (0.0334), with about half of all Age_Gender proxy forecasts falling back (`fallback_share` about 0.5, against
+  0.04 and 0.008 before). The short histories at these early origins probably push the proxy methods onto their fallback; this
+  was not checked.
 
 ## Limits of this review
 
