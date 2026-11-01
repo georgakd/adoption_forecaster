@@ -71,42 +71,73 @@ def test_a_and_c_lasso_paths_are_never_called_by_the_default_pipeline(world, con
         assert len(run_pipeline_on_inputs(Path(d), "age_gender", 2024, 2026, config=config))
 
 
-# (c) what the LASSO proxy path would do if target_markets were set
+# (c) the LASSO proxy path when target_markets is set
 
 
 def _age_gender_with_gap(world, d):
     path = write_age_gender_inputs(world, Path(d) / "Age_Gender" / "input")[0]
     df = pd.read_csv(path)
+    truth = df.loc[df["country"] == "Austria", ["2023", "2024"]].to_numpy() / 100
     df.loc[df["country"] == "Austria", ["2023", "2024"]] = np.nan  # the target market misses its last two years
     df.to_csv(path, index=False)
+    return truth
 
 
-def test_c_age_gender_lasso_path_crashes_when_enabled(world, config):
+def _age_gender_lasso_enabled(config):
     enabled = copy.deepcopy(config)
     enabled["target_markets"] = {"Austria": ["Belgium", "Denmark", "France", "Germany"]}
+    return enabled
+
+
+def test_c_age_gender_lasso_path_fills_the_gap_on_the_share_scale(world, config):
+    # (c) fixed: used to raise TypeError (backtest_model called without config), and with that bypassed every filled cell was 0.01
+    with tempfile.TemporaryDirectory() as d:
+        truth = _age_gender_with_gap(world, d)
+        table = run_pipeline_on_inputs(Path(d), "age_gender", 2024, 2026, config=_age_gender_lasso_enabled(config))
+    filled = table[(table["country"] == "Austria") & table["year"].isin([2023, 2024])]["value"].to_numpy()
+    assert len(filled) == truth.size
+    assert ((filled > 0.01) & (filled <= 1)).all()
+    assert np.abs(np.sort(filled) - np.sort(truth.ravel())).mean() < 0.1  # same scale as the truth, not percent or 1%
+
+
+def test_c_age_gender_lasso_target_is_the_predicted_year_not_a_feature(world, config, monkeypatch):
+    # (c) fixed: y_train used to be the year before the predicted one, which is also the last column of X_train
+    seen = []
+
+    def spy(X_train, y_train, config=None):
+        seen.append((list(X_train.columns), y_train.name))
+        return train_lasso(X_train, y_train, config=config)
+
+    monkeypatch.setattr(qf_module, "train_lasso", spy)
     with tempfile.TemporaryDirectory() as d:
         _age_gender_with_gap(world, d)
-        with pytest.raises(TypeError, match="not subscriptable"):  # backtest_model(lasso, X, y) is called without config
-            run_pipeline_on_inputs(Path(d), "age_gender", 2024, 2026, config=enabled)
+        run_pipeline_on_inputs(Path(d), "age_gender", 2024, 2026, config=_age_gender_lasso_enabled(config))
+    assert seen
+    assert all(target not in features and int(target) == int(features[-1]) + 1 for features, target in seen)
 
 
-def test_c_age_gender_lasso_path_writes_one_percent_when_the_crash_is_bypassed(world, config, monkeypatch):
-    enabled = copy.deepcopy(config)
-    enabled["target_markets"] = {"Austria": ["Belgium", "Denmark", "France", "Germany"]}
-    monkeypatch.setattr(qf_module, "backtest_model", lambda *a, **k: (0.0, 0.0, 0.0))
-    with tempfile.TemporaryDirectory() as d:
-        _age_gender_with_gap(world, d)
-        table = run_pipeline_on_inputs(Path(d), "age_gender", 2024, 2026, config=enabled)
-    filled = table[(table["country"] == "Austria") & table["year"].isin([2023, 2024])]["value"]
-    # the data are still in percent when the LASSO prediction is clipped to [0, 1]; after the later /100 every filled cell is 0.01
-    assert np.allclose(filled, 0.01)
+def _education_with_gap(countries, missing):
+    idx = pd.MultiIndex.from_product([countries, ["secondary", "tertiary"]], names=["country", "education"])
+    years = list(range(2010, 2023))
+    rng = np.random.default_rng(0)
+    rows = []
+    for k in range(len(countries)):
+        ter = 0.2 + 0.01 * (k + 1) * np.arange(len(years)) + rng.normal(0, 0.002, len(years))
+        rows += [1 - ter, ter]
+    df = pd.DataFrame(rows, index=idx, columns=years)
+    for country in missing:
+        df.loc[country, 2022] = np.nan
+    return df
 
 
-def test_c_education_lasso_path_needs_exactly_three_hardcoded_targets(config):
-    idx = pd.MultiIndex.from_product([["A", "B", "C", "D"], ["secondary", "tertiary"]], names=["country", "education"])
-    df = pd.DataFrame(np.random.default_rng(0).random((8, 6)), index=idx, columns=range(2017, 2023))
-    with pytest.raises(IndexError):
-        ProxyHandler(config).apply_LASSO_for_the_three_countries_with_missing_data(df, ["A"], ["secondary", "tertiary"], 2022)
+@pytest.mark.parametrize("targets", [["A"], ["A", "B"], ["A", "B", "C", "D"]])
+def test_c_education_lasso_path_takes_any_number_of_targets(config, targets):
+    # (c) fixed: used to raise IndexError unless there were exactly three targets (Iceland, North Macedonia, UK by position)
+    countries = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    df = _education_with_gap(countries, targets)
+    out = ProxyHandler(config).apply_LASSO_for_the_three_countries_with_missing_data(df, targets, ["secondary", "tertiary"], 2022)
+    assert out.loc[targets, 2022].notna().all()
+    assert (out.loc[targets, 2022].between(0, 1)).all()
 
 
 # (d) clipping to [0, 1] versus the logistic ceiling K_max
@@ -124,13 +155,28 @@ def test_d_ceiling_rule_b_random_factor_is_one_constant(config):
     assert factor == pytest.approx(1.0032132, abs=1e-7)  # the seed is reset before every row, so every row gets this factor
 
 
-def test_d_ceiling_rule_needs_three_observations_per_series(config):
+def _ceiling_preds(value):
+    preds = pd.DataFrame({"country_age": ["X 16_24"], "gender": ["male"]})
+    for year in (2022, 2023):
+        for model in ("logistic", "rw", "theta", "combined"):
+            preds[f"{year}_{model}"] = value
+    return preds
+
+
+def test_j_ceiling_rule_leaves_short_series_below_the_ceiling_alone(config):
+    # (j) fixed: fewer than three observations used to raise KeyError (real age_gender origins 2019 and 2020 could not run)
     train = pd.DataFrame({2019: [np.nan], 2020: [0.9], 2021: [0.95]}, index=["X 16_24 male"])
-    preds = pd.DataFrame({"country_age": ["X 16_24"], "gender": ["male"], "2023_logistic": [0.9], "2023_rw": [0.9], "2023_theta": [0.9]})
-    for col in ("2022_logistic", "2022_rw", "2022_theta"):
-        preds[col] = 0.9
-    with pytest.raises(KeyError):  # this is why the real age_gender backtest cannot run at origins 2019 and 2020
-        adjust_100prc_predictions_cases(preds, train, 2023, config)
+    out = adjust_100prc_predictions_cases(_ceiling_preds(0.9), train, 2023, config)
+    assert (out[["2022_combined", "2023_combined"]] == 0.9).all(axis=None)
+
+
+def test_j_ceiling_rule_b_applies_to_a_short_series_at_the_ceiling(config):
+    # two observations at 100% are not "the last three years at 100%", so rule (a) cannot apply and rule (b) does
+    train = pd.DataFrame({2019: [np.nan], 2020: [1.0], 2021: [1.0]}, index=["X 16_24 male"])
+    preds = _ceiling_preds(1.0)
+    preds[["2022_logistic", "2023_logistic"]] = config["modules"]["age_gender"]["settings"]["K_max"]
+    out = adjust_100prc_predictions_cases(preds, train, 2023, config)
+    assert (out[["2022_combined", "2023_combined"]] < 1).all(axis=None)
 
 
 # (e) .replace(0, np.nan) on the Education ratios
@@ -152,10 +198,12 @@ def test_e_replace_zero_undoes_the_groupby_sum_of_an_all_missing_year():
     assert merged.replace(0, np.nan)[2021].isna().all()  # ... and the replace restores the gap
 
 
-def test_e_a_missing_tertiary_level_makes_secondary_exactly_one():
+def test_e_a_missing_tertiary_level_makes_the_year_missing_for_both_levels():
+    # (e) fixed: secondary used to become exactly 1.0 (Portugal 2006 in the real data)
     merged = MissingDataHandler.merge_education_levels(MissingDataHandler.calculate_internet_users_ratio(_abs_users(2021)))
     merged = merged.astype(float).replace(0, np.nan)
-    assert merged.loc[("X", "secondary"), 2021] == 1.0 and np.isnan(merged.loc[("X", "tertiary"), 2021])
+    assert merged[2021].isna().all()
+    assert not merged[[2020, 2022]].isna().any(axis=None)
 
 
 # (f) LASSO CV with very few proxy rows
@@ -186,13 +234,17 @@ def test_g_random_walk_and_theta_forecasts_of_the_two_shares_sum_to_one(config, 
     np.testing.assert_allclose(theta, 1, atol=1e-9)
 
 
-# (i) the two-year horizon is hard-coded in the Education predictor
+# (i) the Education predictor's horizon
 
 
-def test_i_education_predictor_cannot_forecast_three_years_ahead(config):
+@pytest.mark.parametrize("horizon", [1, 2, 3])
+def test_i_education_predictor_forecasts_the_requested_horizon(config, horizon):
+    # (i) fixed: the horizon used to be two years, hard-coded; predict(df, 2022, 2025) raised KeyError
     idx = pd.MultiIndex.from_product([["X"], ["secondary", "tertiary"]], names=["country", "education"])
     ter = 0.3 + 0.01 * np.arange(len(YEARS))
     df = pd.DataFrame([1 - ter, ter], index=idx, columns=YEARS)
-    EducationPredictor(pred_year=2024, config=config).predict(df.copy(), 2022, 2024)  # horizon 2 works
-    with pytest.raises(KeyError):
-        EducationPredictor(pred_year=2025, config=config).predict(df.copy(), 2022, 2025)
+    out = EducationPredictor(pred_year=2022 + horizon, config=config).predict(df.copy(), 2022, 2022 + horizon)
+    future = out[[2022 + i for i in range(1, horizon + 1)]]
+    assert future.notna().all(axis=None)
+    np.testing.assert_allclose(future.sum(), 1, atol=1e-10)
+    assert (future.loc[("X", "tertiary")].diff().dropna() > 0).all()  # the trend continues year after year

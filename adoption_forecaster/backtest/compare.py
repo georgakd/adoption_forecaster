@@ -34,7 +34,7 @@ METHODS = ("ensemble", "gam", "entropy_proxy", "kernel_proxy")
 MODULES = ("education", "age_gender")
 REAL_ORIGINS = (2019, 2020, 2021, 2022)
 # Real origin used (Education only) with the dev seeds to choose GAM options. NOT fully out of sample: its scored years (2019-2020)
-# overlap the truth of the earliest reported origin (2019 is scored on 2020-2021), and nothing earlier can run for Age_Gender;
+# overlap the truth of the earliest reported origin (2019 is scored on 2020-2021);
 # gam_anchor_robustness() checks that the decision does not depend on the choice made here.
 TUNING_ORIGIN = 2018
 # Decision rule, fixed before any result was looked at: a method becomes an option for a module only if its MAE is at least
